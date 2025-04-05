@@ -1,0 +1,40 @@
+
+name: 🛸 Welcome to Light Engine
+
+on:
+  pull_request:
+    types: [opened]
+  issues:
+    types: [opened]
+
+jobs:
+  greet-contributor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ✨ Greet new contributor
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Welcome to **Light Engine**!
+
+            We’re honored to have you exploring reality with us.  
+            Whether you're simulating photons or crafting programmable matter, this project thrives on curiosity, transparency, and collaboration.
+
+            🔭 Here's how to get started:
+            - Review the [README](https://github.com/leoncscott543/light-engine#readme)
+            - Check out the [CONTRIBUTING.md](https://github.com/leoncscott543/light-engine/blob/main/CONTRIBUTING.md)
+            - Say hello in Discussions!
+
+            _Let there be Light._
+          pr-message: |
+            🚀 Thanks for your pull request and for contributing to **Light Engine**!
+
+            Every simulation starts with a single cause. You’re helping build a new foundation for physical, photonic, and material realism.
+
+            ✅ Please confirm:
+            - Your code is modular and commented
+            - Experiments (if any) are in `4_lab/`
+            - You've reviewed our [Governance](https://github.com/leoncscott543/light-engine/blob/main/GOVERNANCE.md)
+
+            We’ll review this soon! 🌌
