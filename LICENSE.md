@@ -39,25 +39,26 @@ Its purpose is to advance the future of simulation for **everyone**, not just th
 
 ---
 
-## 🔐 Enterprise Use Clause
+## 💼 Enterprise Licensing
 
-Commercial entities may use Light Engine freely **under the terms of the AGPLv3**. However:
+Light Engine is free and open-source under AGPLv3 for all personal, academic, artistic, and cooperative use.
 
-- If you build proprietary systems *with or on top of Light Engine*, you must:
-  - Publicly share your codebase, including modifications.
-  - Maintain attribution and license references.
-  - Not block public access to the functioning source (especially for hosted services).
+If you represent an **enterprise organization**, you are **required** to obtain a commercial license if:
 
-### 🧾 Optional Commercial Support / Licensing
+- You do not wish to comply with AGPLv3’s source-sharing terms  
+- You deploy Light Engine at scale in proprietary infrastructure  
+- You generate direct revenue via platforms powered by Light Engine  
 
-We offer **optional enterprise licensing and support agreements** for organizations who wish to:
+To respect the transparency and values of the project, we offer enterprise licenses via:
 
-- Integrate Light Engine into proprietary pipelines
-- Collaborate on research and AI simulations
-- Scale across distributed compute systems
-- Influence future architectural design decisions
+- 🌐 [Cooperative Agreements]
+- 🛠️ Dedicated Support Contracts
+- 🔒 Private Deployments with Open Governance
 
-Contact the maintainers to discuss cooperative partnership models.
+**Contact the maintainers** to begin a conversation.
+
+> This ensures Light Engine stays open for humanity, and supported by those who benefit from it the most.
+
 
 ---
 
