@@ -1,58 +1,108 @@
-GNU Affero General Public License (AGPLv3)
 
-Project License Overview
+# 📜 LICENSE.md — Light Engine
 
-This project, "Light Engine," is licensed under the GNU Affero General Public License (AGPL) version 3. This license guarantees that your contributions and modifications to this project remain open, transparent, and accessible to everyone.
+## License: GNU Affero General Public License v3.0 (AGPLv3)
 
-Complete Project Directory Structure
+This software is licensed under the AGPLv3 to preserve its openness, transparency, and accessibility to all — forever.
 
-Ensure your project is clearly organized and transparent by using the following comprehensive directory structure:
+---
 
-light_engine/
-├── LICENSE.md (AGPLv3 License)
-├── 0_ordinem/ (Core orchestration logic)
-├── 1_matter/ (Particle and material definitions)
-├── 2_interactions/ (Physics interactions and simulations)
-├── 3_kits/ (Utility tools and libraries)
-├── 4_lab/ (Experimental development and tests)
-├── 5_src/ (Main entry points for the engine)
-├── README.md (Project overview and usage guide)
-├── CONTRIBUTING.md (Contribution guidelines)
-└── CODE_OF_CONDUCT.md (Expected behaviors and community standards)
+## 📖 Summary
 
-License File Location
+The Light Engine is released under the **GNU Affero General Public License v3.0**, which guarantees the following:
 
-Place this LICENSE.md at the root (light_engine/) of your project directory. Doing so clearly communicates the licensing terms and conditions to all developers, users, and contributors.
+- 🆓 **Freedom to use** the software for any purpose.
+- 🧑‍💻 **Freedom to study** how the software works, and change it to make it do what you wish.
+- 🔄 **Freedom to share** copies with others.
+- 💡 **Freedom to improve** the program, and release your improvements to the public.
 
-Understanding the AGPLv3
+### ✅ If you use Light Engine...
 
-Under AGPLv3, you can:
+- You **must preserve the license**.
+- You **must make your source code public**, including any changes you make — even if running it as a service over a network (web apps, hosted platforms, etc.).
+- You **cannot relicense** the software as closed-source.
+- You may **commercialize**, **host**, **build on**, or **integrate** Light Engine — as long as **transparency and attribution** are preserved.
 
-Run and distribute copies of the software.
+---
 
-Modify the software and create derivative works.
+## 🏛️ Our Philosophy
 
-Use the software commercially.
+We believe in software that is:
 
-Conditions:
+- **Forever free** to explore
+- **Impossible to privatize**
+- **Transparent to all who use it**
+- **Owned collectively**, not by corporations
 
-You must disclose the source code of your modifications.
+Light Engine is open-source in **principle**, not just in practice.  
+Its purpose is to advance the future of simulation for **everyone**, not just those who can afford enterprise platforms.
 
-Modifications must also be licensed under the AGPLv3.
+---
 
-Source code must be provided to users upon request or available via network services used to access the software.
+## 🔐 Enterprise Use Clause
 
-The full license terms can be found at GNU Affero General Public License v3.
+Commercial entities may use Light Engine freely **under the terms of the AGPLv3**. However:
 
-Enterprise Licensing Option
+- If you build proprietary systems *with or on top of Light Engine*, you must:
+  - Publicly share your codebase, including modifications.
+  - Maintain attribution and license references.
+  - Not block public access to the functioning source (especially for hosted services).
 
-For enterprise organizations seeking commercial use without the AGPLv3 transparency requirements, an alternative proprietary licensing agreement is available. This license permits use without the obligation to disclose source code modifications publicly.
+### 🧾 Optional Commercial Support / Licensing
 
-To obtain an enterprise license, please contact the project maintainers directly.
+We offer **optional enterprise licensing and support agreements** for organizations who wish to:
 
-Purpose and Philosophy
+- Integrate Light Engine into proprietary pipelines
+- Collaborate on research and AI simulations
+- Scale across distributed compute systems
+- Influence future architectural design decisions
 
-The AGPLv3 supports the project's foundational principles of openness, transparency, and community-driven development, ensuring the project's long-term availability for collaborative improvement.
+Contact the maintainers to discuss cooperative partnership models.
 
-By adhering to these licensing guidelines, contributors ensure that Light Engine remains freely accessible and continuously beneficial to the broader community.
+---
 
+## 📎 Frequently Asked Questions
+
+**Q: Can I build a business around Light Engine?**  
+Yes, as long as your changes and code remain open, and you follow the terms of AGPLv3.
+
+**Q: Can I build a proprietary frontend?**  
+Yes, but anything interfacing with or depending on Light Engine must disclose its source.
+
+**Q: What if I don’t want to open my changes?**  
+You may request a **commercial license agreement** with the core maintainers for a dual-license solution.
+
+**Q: Can I use it in education or science?**  
+Absolutely. We encourage scientific and educational applications and will support curriculum integration where possible.
+
+---
+
+## 📚 Full License Text
+
+Copyright (C) 2025 Leon Scott + Light Engine Collective
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3.
+
+This program is distributed in the hope that it will be useful,  
+but WITHOUT ANY WARRANTY; without even the implied warranty of  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the  
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License  
+along with this program. If not, see: [https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html)
+
+---
+
+## 🕊️ This License Is Non-Negotiable
+
+This license protects:
+- The commons
+- The contributors
+- The code
+- The integrity of what Light Engine stands for
+
+If you wish to do business, cooperate.  
+If you wish to contribute, welcome.  
+If you wish to exploit, you’ll have to go elsewhere.
+
+Let there be Light — and let it always be free.
