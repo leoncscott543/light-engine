@@ -1,110 +1,150 @@
 
-# 🤝 Contributing to Light Engine
+# 🤝 CONTRIBUTING.md — Light Engine
 
-Welcome, engineer of the cosmos. 🌌  
-Light Engine is not just a codebase — it's a metaphysical framework for building the next generation of simulation, design, and digital materiality.
+Welcome, creator of realities.  
+This document outlines how to contribute to the Light Engine project — whether you're a developer, researcher, artist, engineer, or dreamer.
 
-We value transparency, cooperation, clarity, and truth. This guide helps you start contributing to Light Engine as a developer, scientist, designer, or dreamer.
-
----
-
-## 🚀 Quick Start
-
-### 1. Clone the Repo
-```bash
-git clone https://github.com/leoncscott543/light-engine.git
-cd light-engine
-```
-
-### 2. Build It
-Make sure you have Rust installed.
-```bash
-cargo build
-```
-
-### 3. Explore
-Start in the `4_lab/` directory and run experiments!
+Light Engine is **not just software** — it’s an evolving simulation of light, matter, causality, and energy. We welcome all who want to help shape the next age of simulation truthfully.
 
 ---
 
-## 🌱 Ways to Contribute
+## 🔧 What You Can Contribute
 
-### 🧬 Define New Particles
-Add realistic or fictional particle types in:
-```
-1_matter/particles/
-```
-Follow the struct conventions and include relevant metadata such as atomic mass, density, photonic index, etc.
+### 🧬 Particles
+Define new `particle` data types under `1_matter/particles/`.  
+Include physical properties like:
+- Mass
+- Charge
+- Heat capacity
+- Reflective index
+- Energy thresholds
 
----
-
-### 🧪 Add an Experiment
-Create your own test in:
-```
-4_lab/experiments/
-```
-Use it to explore particle collisions, material reactions, photon scattering, or even DSL input parsing.
+You may use real-world data or propose fictional constructs that behave in physically plausible ways.
 
 ---
 
-### ⚙️ Create or Improve a Law
-Submit new calculations or extend laws in:
-```
-0_ordinem/laws/
-```
-Example: laws of motion, optics, thermodynamics, quantum approximations.
+### 🧱 Materials
+Add programmable `materials` as compositions of particles.  
+Define:
+- Bonding rules
+- Thermal expansion
+- Refractive and stress responses
+- Visual and physical deformation behaviors
+
+See `1_matter/materials/`.
 
 ---
 
-### 📜 Improve Documentation
-Enhance or add documentation for:
-- Folders (`README.md` in each directory)
-- Particle or material formats
-- Simulation demos and CLI tools
+### 🌐 Environments
+Design physical `environments` composed of:
+- Air particles or vacuums
+- Gravity and field rules
+- Lighting volumes
+- Pressure and temperature domains
+
+See `1_matter/environments/`.
 
 ---
 
-### 🧰 Extend Utility Kits
-Add mathematical helpers or simulation tools in:
-```
-3_kits/
-```
+### 🔁 Interactions
+Add logic to `2_interactions/` to define how particles and materials:
+- Collide
+- Reflect
+- React
+- Deform
+- Absorb or emit energy
 
 ---
 
-## 📐 Project Philosophy
+### ⚖️ Laws of Nature
+Enhance or create new physics laws in `0_ordinem/laws/`:
+- Newtonian motion
+- Thermodynamics
+- Photonic behavior
+- Material strength models
 
-All contributors must uphold the foundational values outlined in:
-
-- [`CONSTITUTION.md`](./CONSTITUTION.md)
-- [`GOVERNANCE.md`](./GOVERNANCE.md)
-
----
-
-## 🗳️ Governance & Decision-Making
-
-We operate democratically and transparently.
-
-1. Proposals are opened as GitHub Issues.
-2. Community members discuss and refine ideas.
-3. Votes are held openly.
-4. Supermajority wins for major engine-altering changes.
-
-See [`GOVERNANCE.md`](./GOVERNANCE.md) for full rules.
+All laws must remain transparent, modular, and verifiable.
 
 ---
 
-## 🛡️ Code of Conduct
+### 🧪 Experiments
+Use the `4_lab/` folder to:
+- Prototype features
+- Stress-test new physics
+- Visualize material performance
+- Try DSL scenarios
 
-Be respectful, kind, and constructive.  
-We’re building the first true metaphysical engine — and that deserves care and community.
+Create a folder under `4_lab/experiments/` with a README and a purpose.
 
 ---
 
-## 🧠 Join Us
+### 🧠 AI & Simulation Intelligence
+Help train interaction surrogates using ML and GPU acceleration:
+- See the roadmap for upcoming surrogate modules
+- Train particle-to-particle predictive models
+- Develop asset builders that interface with real-time material design
 
-- Open a PR, issue, or experiment.
-- Create a new fictional material or particle.
-- Help us define the future of simulation.
+---
 
-Thanks for being part of the Light.
+## 🧭 Philosophy
+
+We believe:
+- In transparency over convenience
+- In realism over faking
+- That contributors should be empowered, not locked out
+- That simulation is a form of truth-telling
+
+If your code or proposal doesn’t make reality clearer, cleaner, or more computable — ask how it might.
+
+---
+
+## 🛡️ Rules of Contribution
+
+### 📂 Branching
+
+1. Fork the repository.
+2. Create a feature branch (`feature/your-name-topic`)
+3. Push and create a PR to `main`.
+
+### 🧾 Requirements
+
+- Clear purpose and description
+- Clean code
+- Descriptive commit history
+- All experiments in `/lab/` must have reproducible steps
+
+---
+
+## 🗳️ Governance
+
+Light Engine is governed by open, transparent democratic processes.
+
+- Propose big ideas via GitHub Discussions or Issues
+- Receive community feedback
+- Vote with a simple or supermajority depending on scope
+- All voices matter equally
+
+See [`GOVERNANCE.md`](./GOVERNANCE.md) for full voting procedures.
+
+---
+
+## 💼 For Enterprise Contributors
+
+Enterprises must open-source any modifications if using Light Engine under AGPLv3.
+
+To contribute back and receive custom support, contact us for:
+- Support agreements
+- Cooperative development
+- Enterprise licensing
+
+---
+
+## 🧰 Need Help?
+
+Open a GitHub Discussion or submit an Issue.
+You can also drop your ideas into the `4_lab/` area as a draft.
+
+We're building the most advanced simulation system in history — and you're invited.
+
+Let there be Light.
+
