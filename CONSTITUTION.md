@@ -104,7 +104,9 @@ We seek to build a space where **creation is honest**, where **science and imagi
 Light Engine is the first real-time simulation substrate that puts truth, light, and physicality before profit, rendering, or marketability.
 
 We welcome contributors, artists, physicists, and visionaries.  
-We welcome enterprise partners — if they support the commons they draw from.  
+
+We welcome enterprise partners — if they support the commons they draw from. 
+
 We welcome anyone who believes that simulation deserves better.
 
 > Let there be Light. And let it never be hidden.
