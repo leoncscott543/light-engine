@@ -17,8 +17,6 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     libxcb1-dev \
     libx11-dev \
-    libvulkan-dev \
-    vulkan-utils \
     libxcb-xfixes0-dev \
     libxcb-randr0-dev \
     libxcb-shape0-dev \
@@ -68,21 +66,6 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
 
 # Install Vulkan SDK
 RUN apt-get update && apt-get install -y libvulkan-dev vulkan-utils
-
-# (Optional) Install AI/ML dependencies if needed
-RUN pip3 install torch torchvision numpy pandas scipy scikit-learn tensorflow keras
-
-# (Optional) Install graphics and cloud tools if needed
-RUN apt-get install -y \
-    libgl1-mesa-glx \
-    libglu1-mesa \
-    libgles2-mesa \
-    sqlite3 \
-    redis-server \
-    rabbitmq-server \
-    nfs-common \
-    samba \
-    jq
 
 # Set the working directory in the container
 WORKDIR /workspace
