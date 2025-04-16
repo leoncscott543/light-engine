@@ -59,113 +59,36 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     clang-tools \
     libncurses5-dev \
+    libwebp-dev \
+    libopencl-dev \
     # Only install multilib and i386 dev packages on amd64
     && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
         apt-get install -y gcc-multilib g++-multilib libc6-dev-i386; \
     fi
 
-# Install Rust and configure it (includes cargo and rustc)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Install Vulkan SDK
+RUN apt-get update && apt-get install -y libvulkan-dev vulkan-utils
 
-# Install Node.js and npm (needed for web-based tools or mobile dev)
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && apt-get install -y nodejs
-
-# Install dependencies for cross-compiling to macOS and mobile platforms
-RUN apt-get install -y \
-    clang \
-    libobjc-7-dev \
-    libstdc++-8-dev \
-    libgcc-8-dev \
-    crossbuild-essential-arm64 \
-    crossbuild-essential-armhf \
-    gcc-arm-none-eabi \
-    libncurses-dev \
-    libxml2-dev \
-    libusb-dev \
-    libssl-dev
-
-# Install Vulkan SDK for rendering
-RUN wget https://sdk.lunarg.com/sdk/download/latest/linux/vulkan-sdk.tar.xz -O /tmp/vulkan-sdk.tar.xz \
-    && mkdir /tmp/vulkan-sdk \
-    && tar -xvf /tmp/vulkan-sdk.tar.xz -C /tmp/vulkan-sdk \
-    && cp -r /tmp/vulkan-sdk/vulkan-sdk/* /usr/local/
-
-# Set environment variables for Vulkan SDK
-ENV VULKAN_SDK=/usr/local/vulkan-sdk/x.x.x.x/x86_64
-ENV PATH=$VULKAN_SDK/bin:$PATH
-ENV LD_LIBRARY_PATH=$VULKAN_SDK/lib:$LD_LIBRARY_PATH
-ENV VK_ICD_FILENAMES=$VULKAN_SDK/etc/vulkan/icd.d/nvidia_icd.json
-ENV VK_LAYER_PATH=$VULKAN_SDK/etc/vulkan/explicit_layer.d
-
-# Install WGPU dependencies for Rust-based WebGPU support
-RUN apt-get install -y libwebp-dev libopencl-dev
-
-# Install Docker CLI and Kubernetes tools for cloud integration
-RUN curl -fsSL https://get.docker.com -o get-docker.sh \
-    && sh get-docker.sh \
-    && rm get-docker.sh
-
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.23.0/bin/linux/amd64/kubectl \
-    && chmod +x kubectl \
-    && mv kubectl /usr/local/bin/
-
-# Install AI/ML dependencies (TensorFlow, PyTorch, etc.)
+# (Optional) Install AI/ML dependencies if needed
 RUN pip3 install torch torchvision numpy pandas scipy scikit-learn tensorflow keras
 
-# Set up environment for cross-compilation and mobile development (iOS, Android)
+# (Optional) Install graphics and cloud tools if needed
 RUN apt-get install -y \
-    android-sdk \
-    android-tools-adb \
-    android-tools-fastboot \
-    build-essential \
-    libc6-dev-i386 \
-    gcc-multilib \
-    g++-multilib \
-    lib32z1-dev \
-    libncurses5-dev \
-    libstdc++6:i386
+    libgl1-mesa-glx \
+    libglu1-mesa \
+    libgles2-mesa \
+    sqlite3 \
+    redis-server \
+    rabbitmq-server \
+    nfs-common \
+    samba \
+    jq
 
 # Set the working directory in the container
 WORKDIR /workspace
 
-# Set up Rust-specific environment (for Light Engine)
-RUN rustup default stable \
-    && rustup update \
-    && rustup component add rust-src rustfmt clippy
-
 # Expose necessary ports (e.g., for cloud services, simulators)
 EXPOSE 8080
-
-# Set up OpenGL and other graphics rendering tools
-RUN apt-get install -y \
-    libgl1-mesa-glx \
-    libglu1-mesa \
-    libgles2-mesa
-
-# Install and set up persistent storage tools (e.g., SQLite, Redis)
-RUN apt-get install -y sqlite3 redis-server
-
-# Install additional tools for cloud simulation (e.g., message brokers, distributed systems)
-RUN apt-get install -y \
-    rabbitmq-server \
-    nfs-common \
-    samba \
-    curl \
-    jq
-
-# Configure system for cloud-based container orchestration (Docker Swarm, Kubernetes)
-RUN apt-get install -y \
-    kubectl \
-    helm
-
-# Set up Docker Buildx
-RUN mkdir -p ~/.docker/cli-plugins \
-    && curl -SL https://github.com/docker/buildx/releases/download/v0.10.0/buildx-v0.10.0.linux-amd64 -o ~/.docker/cli-plugins/docker-buildx \
-    && chmod +x ~/.docker/cli-plugins/docker-buildx
-
-# Build and export multi-arch Docker image
-RUN docker buildx create --use \
-    && docker buildx build --platform linux/amd64,linux/arm64 --tag leonscott543/lightengine:latest --load .
 
 # Default command (override this as necessary)
 CMD ["bash"]
