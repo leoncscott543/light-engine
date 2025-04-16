@@ -57,23 +57,4 @@ jobs:
     # Step 7: Build Docker image (if relevant for your project)
     - name: Build Docker image
       run: |
-        docker build -t yourusername/lightengine .
-
-    # Step 8: Optionally run Docker tests or commands inside a container
-    - name: Run tests inside Docker container
-      run: |
-        docker run --rm yourusername/lightengine cargo test --verbose
-
-    # Step 9: Push Docker image to Docker Hub (optional)
-    - name: Push Docker image to Docker Hub
-      if: github.ref == 'refs/heads/main'  # Only run this on `main` branch
-      run: |
-        echo $DOCKER_PASSWORD | docker login --username $DOCKER_USERNAME --password-stdin
-        docker tag yourusername/lightengine yourusername/lightengine:latest
-        docker push yourusername/lightengine:latest
-
-    # Optional Step 10: Deploy to cloud (AWS, GCP, Azure, etc.)
-    - name: Deploy to AWS ECS (example)
-      if: github.ref == 'refs/heads/main'  # Only deploy from the main branch
-      run: |
-        aws ecr get-login-password --
+        docker build -t leonscott543/lightengine .
