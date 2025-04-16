@@ -21,6 +21,9 @@ downloaded and installed rust standard tooling
   
 modifying the HKEY_CURRENT_USER/Environment/PATH registry key
 
+- moved all tree modules into /src, per Rust project structure guidelines
+
+
 
 Windows SubSystem for Linux dev Setup:
 
