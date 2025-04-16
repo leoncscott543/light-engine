@@ -60,10 +60,11 @@ RUN apt-get update && apt-get install -y \
     clang-tools \
     libncurses5-dev \
     libwebp-dev \
-    libopencl-dev \
-    # Only install multilib and i386 dev packages on amd64
-    && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-        apt-get install -y gcc-multilib g++-multilib libc6-dev-i386; \
+    libopencl-dev
+
+# Only install multilib and i386 dev packages on amd64
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+      apt-get update && apt-get install -y gcc-multilib g++-multilib libc6-dev-i386; \
     fi
 
 # Install Vulkan SDK
