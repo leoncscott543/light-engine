@@ -65,7 +65,7 @@ RUN apt-get update && apt-get install -y \
     fi
 
 # Install Rust and configure it (includes cargo and rustc)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 # Install Node.js and npm (needed for web-based tools or mobile dev)
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && apt-get install -y nodejs
