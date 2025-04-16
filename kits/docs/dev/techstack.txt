@@ -1,0 +1,82 @@
+Light Engine Tech Stack (Hierarchical, Open Source, Rust-Only, Ultra Cross-Platform)
+
+Core Language & Toolchain:
+    - Rust (stable, pinned via rust-toolchain.toml)
+    - Cargo (build, dependency, and package manager)
+    - rust-analyzer (IDE integration)
+    - rustfmt (code formatting)
+    - clippy (linter)
+    - Custom CLI (Rust, for project management, build, test, deploy, runtime)
+    - System detection and bootstrapping (Rust, CLI-integrated)
+
+Rendering & Graphics:
+    - wgpu (Rust-native, cross-platform GPU abstraction)
+    - winit (cross-platform window/input abstraction)
+    - raw-window-handle (platform window handles)
+    - Custom realtime preview layer (Rust, CLI and GUI)
+
+Math & Utilities:
+    - glam (SIMD math)
+    - rand (random number generation)
+    - log, tracing (logging/diagnostics)
+    - serde, serde_json, ron (serialization/deserialization)
+
+Asset Management:
+    - image (image loading/processing)
+    - gltf, tobj (3D asset loading)
+    - directories (cross-platform asset/config path management)
+
+Audio:
+    - rodio (audio playback)
+    - cpal (cross-platform audio I/O)
+
+Scripting & DSL:
+    - aria (custom DSL, Rust implementation)
+
+ECS & Physics:
+    - Custom ECS framework (Rust, from scratch)
+    - Custom physics engine (Rust, from scratch)
+
+Testing & QA:
+    - Rust built-in test framework (unit/integration)
+    - Criterion (benchmarking)
+    - CLI-integrated test management (unlimited test creation/discovery)
+    - cargo-audit (dependency security)
+
+Realtime Monitoring & Logging:
+    - tracing (performance monitoring, logging)
+    - Custom dashboards (Rust, CLI and GUI)
+
+WebAssembly (WASM) Support:
+    - wasm-bindgen, wasm-pack, trunk (browser builds)
+    - web-sys, js-sys (browser APIs)
+
+Containerization & DevOps:
+    - Docker (reproducible builds, CI, deployment)
+    - GitHub Actions (CI/CD pipelines)
+    - DevContainers (VS Code, optional)
+
+Cloud & Edge Compatibility:
+    - Open source cloud SDKs (AWS, Azure, GCP for Rust)
+    - Edge compute node support (cross-compilation, deployment)
+    - Networking: tokio, quinn (multiplayer/distributed runtime)
+
+AI & Data (DARA):
+    - DARA (custom AI/data engine, Rust)
+    - Integration with open source ML/data crates (tch-rs, burn, ndarray, polars, etc.)
+
+Documentation:
+    - rustdoc (API docs)
+    - mdBook (book-style docs)
+    - CLI and GUI documentation generation
+
+Version Control:
+    - Git (version control)
+    - GitHub (repo hosting, issues, PRs)
+
+Philosophy & Architecture:
+    - 100% open source, Rust-only, no C++ or proprietary dependencies
+    - Modular, plug-and-play architecture at all levels
+    - Ultra cross-platform: Windows, Linux, macOS, WebAssembly, cloud, edge, future mobile/console
+    - Designed for both developers and end-users (gamers, enthusiasts)
+    - First-principles, close-to-metal, flexible, and nimble

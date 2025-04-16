@@ -1,0 +1,22 @@
+4/15/2025
+Leon Scott
+
+--- keeping track of some initial procedural tasks setting up dev env for core light engine ---- 
+
+- downloaded git
+- created new light engine repository
+- flushed out a rough draft of the engine directory tree structure
+- made some generalist readme's, license, consistituion .mds.... will refine as I proceed 
+- will develop on windows for the time being, at least setting up dev env.... 
+- will migrate to linux, debian probably, once i begin low level development
+
+- VS code as editor right now
+- developed the core stack... will place it in this directory \
+
+RUST:
+downloaded and installed rust standard tooling
+  C:\Users\leonc\.rustup
+  C:\Users\leonc\.cargo
+  C:\Users\leonc\.cargo\bin
+  
+modifying the HKEY_CURRENT_USER/Environment/PATH registry key
