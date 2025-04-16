@@ -1,10 +1,6 @@
-version: '3.8'
 services:
   lightengine:
-    extends:
-      file: docker-compose.yml
-      service: lightengine
-    environment:
-      - DEBUG=true
-    ports:
-      - "3000:3000"
+    image: lightengine
+    build:
+      context: .
+      dockerfile: ./Dockerfile
