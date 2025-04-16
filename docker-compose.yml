@@ -1,0 +1,6 @@
+services:
+  lightengine:
+    image: lightengine
+    build:
+      context: .
+      dockerfile: ./Dockerfile
