@@ -67,8 +67,15 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
 # Install Vulkan SDK
 RUN apt-get update && apt-get install -y libvulkan-dev vulkan-utils
 
+# Install Rust toolchain
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Set the working directory in the container
-WORKDIR /workspace
+WORKDIR /app
+
+# Copy your project files into the container
+COPY . /app
 
 # Expose necessary ports (e.g., for cloud services, simulators)
 EXPOSE 8080
