@@ -54,6 +54,7 @@ jobs:
           push: false
           tags: leonscott543/light-engine:latest
           platforms: linux/amd64,linux/arm64
+          load: true
 
       - name: Run tests in Docker (x86_64)
         run: docker run --rm leonscott543/light-engine cargo test --verbose
@@ -96,7 +97,6 @@ jobs:
         with:
           toolchain: stable
           override: true
-
       - name: Cache Cargo registry
         uses: actions/cache@v4
         with:
