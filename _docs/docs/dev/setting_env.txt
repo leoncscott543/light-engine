@@ -20,3 +20,6 @@ downloaded and installed rust standard tooling
   C:\Users\leonc\.cargo\bin
   
 modifying the HKEY_CURRENT_USER/Environment/PATH registry key
+
+- installed WSL -windows subsystem for linux - in windows 11.... 
+  - provides full linux env for development
