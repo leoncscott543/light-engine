@@ -17,17 +17,17 @@ jobs:
     steps:
     # Step 1: Checkout the code from the repository
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     # Step 2: Set up Rust
     - name: Set up Rust
-      uses: actions/setup-rust@v2
+      uses: actions/setup-rust@v4
       with:
-        rust-version: stable  # Can be adjusted to use a specific version or nightly if needed
+        rust-version: 1.86.0  # Can be adjusted to use a specific version or nightly if needed
 
     # Step 3: Cache Cargo dependencies
     - name: Cache Cargo dependencies
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
