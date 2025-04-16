@@ -21,9 +21,10 @@ jobs:
 
     # Step 2: Set up Rust
     - name: Set up Rust
-      uses: actions/setup-rust@v2
+      uses: actions-rs/toolchain@v1
       with:
-        rust-version: stable
+        toolchain: stable
+        override: true
 
     # Step 3: Add cross targets
     - name: Add cross targets
