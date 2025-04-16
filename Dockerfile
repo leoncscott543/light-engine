@@ -1,4 +1,4 @@
-# Use an official Ubuntu base image for cross-platform compatibility and stability
+# Start with a minimal Ubuntu base image
 FROM ubuntu:20.04
 
 LABEL Name="Light Engine" Version="0.1.0" Description="Light Engine simulation, AI, rendering, and cloud support"
@@ -57,14 +57,16 @@ RUN apt-get update && apt-get install -y \
     sudo \
     gnupg2 \
     apt-transport-https \
-    libclang-dev \
-    clang-format \
-    clang-tools
+    clang-tools \
+    libncurses5-dev \
+    gcc-multilib \
+    g++-multilib \
+    libc6-dev-i386
 
 # Install Rust and configure it (includes cargo and rustc)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Node.js and npm (needed for certain web-based tools or mobile dev)
+# Install Node.js and npm (needed for web-based tools or mobile dev)
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && apt-get install -y nodejs
 
 # Install dependencies for cross-compiling to macOS and mobile platforms
@@ -108,9 +110,6 @@ RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.23.0/b
 
 # Install AI/ML dependencies (TensorFlow, PyTorch, etc.)
 RUN pip3 install torch torchvision numpy pandas scipy scikit-learn tensorflow keras
-
-# Install AI/ML model tools (Optional)
-RUN pip3 install openai gym stable-baselines3
 
 # Set up environment for cross-compilation and mobile development (iOS, Android)
 RUN apt-get install -y \
