@@ -19,6 +19,10 @@
 			"profile": "complete",
 			"targets": "x86_64-unknown-redox,x86_64-unknown-uefi"
 		},
+		"ghcr.io/devcontainers/features/vulkan:1": {
+			"version": "latest"
+		}
+		},
 		"ghcr.io/swift-server-community/swift-devcontainer-features/foundationnetworking:1": {},
 		"ghcr.io/devcontainers-extra/features/cmake:1": {
 			"version": "latest"
