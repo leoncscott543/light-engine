@@ -11,85 +11,70 @@ env:
 
 jobs:
   build-linux:
-
     runs-on: ubuntu-latest
-
     steps:
-    # Step 1: Checkout the code from the repository
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # Step 2: Set up Rust
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
-    # Step 3: Add cross targets
-    - name: Add cross targets
-      run: |
-        rustup target add x86_64-unknown-linux-gnu
-        rustup target add aarch64-unknown-linux-gnu
+      - name: Add cross targets
+        run: |
+          rustup target add x86_64-unknown-linux-gnu
+          rustup target add aarch64-unknown-linux-gnu
 
-    # Step 4: Install cross-compilation toolchain for aarch64
-    - name: Install cross-compilation toolchain for aarch64
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install cross-compilation toolchain for aarch64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
-    # Step 5: Cache Cargo dependencies
-    - name: Cache Cargo dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    # Step 6: Build the Rust project
-    - name: Build project
-      run: cargo build --release --verbose
+      - name: Build project
+        run: cargo build --release --verbose
 
-    # Step 7: Run Clippy (Rust linter)
-    - name: Run Clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-    # Step 8: Run tests
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Run tests
+        run: cargo test --verbose
 
-    # Optional: Cross-compiling tests (e.g., test on multiple platforms)
-    - name: Run tests on multiple targets
-      run: |
-        cargo build --target x86_64-unknown-linux-gnu
-        cargo test --target x86_64-unknown-linux-gnu
-        cargo build --target aarch64-unknown-linux-gnu
-        cargo test --target aarch64-unknown-linux-gnu
+      - name: Run tests on multiple targets
+        run: |
+          cargo build --target x86_64-unknown-linux-gnu
+          cargo test --target x86_64-unknown-linux-gnu
+          cargo build --target aarch64-unknown-linux-gnu
+          cargo test --target aarch64-unknown-linux-gnu
 
-    # Step 9: Install cargo-cross
-    - name: Install cargo-cross
-      run: cargo install cross
+      - name: Install cargo-cross
+        run: cargo install cross
 
-    # Step 10: Cross build and test (aarch64)
-    - name: Cross build and test (aarch64)
-      run: cross test --target aarch64-unknown-linux-gnu
+      - name: Cross build and test (aarch64)
+        run: cross test --target aarch64-unknown-linux-gnu
 
-    # Step 11: Build multi-arch Docker image
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Build and export multi-arch Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false # Set to true if you want to push to Docker Hub
-        tags: leonscott543/lightengine:latest
-        platforms: linux/amd64,linux/arm64
+      - name: Build and export multi-arch Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: leonscott543/lightengine:latest
+          platforms: linux/amd64,linux/arm64
 
-    # Step 12: (Optional) Run tests in Docker (only works on native arch)
-    - name: Run tests in Docker (x86_64)
-      run: docker run --rm leonscott543/lightengine cargo test --verbose
+      - name: Run tests in Docker (x86_64)
+        run: docker run --rm leonscott543/lightengine cargo test --verbose
 
   build-windows:
     runs-on: windows-latest
@@ -113,10 +98,3 @@ jobs:
       - run: cargo build --release --verbose
       - run: cargo test --verbose
 
-[dependencies]
-ash = "0.37"
-wgpu = "0.19"
-winit = "0.29"         # Cross-platform window creation/event loop
-raw-window-handle = "0.6" # For surface creation with ash/wgpu
-log = "0.4"            # Logging facade
-env_logger = "0.11"    # Logging implementation
