@@ -11,7 +11,7 @@ Leon Scott
 - will migrate to linux, debian probably, once i begin low level development
 
 - VS code as editor right now
-- developed the core stack... will place it in this directory \
+- developed the core stack... will place it in this directory
 
 RUST:
 downloaded and installed rust standard tooling
@@ -21,5 +21,12 @@ downloaded and installed rust standard tooling
   
 modifying the HKEY_CURRENT_USER/Environment/PATH registry key
 
+
+Windows SubSystem for Linux dev Setup:
+
 - installed WSL -windows subsystem for linux - in windows 11.... 
-  - provides full linux env for development
+  - provides full linux env for development'
+- update windows kernel to support Ubuntu WSL2
+- use wsl2 in vs code from here on out for max parody across systems
+- upgrade to latest ubuntu.... ->>>> sudo apt upgrade..... 
+- sticking with 24.04 LTS for max stability
