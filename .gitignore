@@ -3,3 +3,7 @@
 "*.log" 
 "*.swp" 
 # stuff
+
+# Added by cargo
+
+/target

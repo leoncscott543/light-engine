@@ -1,0 +1,6 @@
+[package]
+name = "light_engine" # The name of the package or project.
+version = "0.1.0" # The current version of the package.
+edition = "2024" # Specifies the Rust edition being used (e.g., 2024 edition).
+
+[dependencies] # A section to list the package dependencies.
