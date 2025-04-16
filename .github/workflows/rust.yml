@@ -17,9 +17,21 @@ jobs:
     steps:
     # Step 1: Checkout the code from the repository
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    # Step 3: Cache Cargo dependencies
+    # Step 2: Set up Rust
+    - name: Set up Rust
+      uses: actions/setup-rust@v2
+      with:
+        rust-version: stable
+
+    # Step 3: Add cross targets
+    - name: Add cross targets
+      run: |
+        rustup target add x86_64-unknown-linux-gnu
+        rustup target add aarch64-unknown-linux-gnu
+
+    # Step 4: Cache Cargo dependencies
     - name: Cache Cargo dependencies
       uses: actions/cache@v4
       with:
@@ -28,15 +40,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
-    # Step 4: Build the Rust project
+    # Step 5: Build the Rust project
     - name: Build project
       run: cargo build --release --verbose
 
-    # Step 5: Run Clippy (Rust linter)
+    # Step 6: Run Clippy (Rust linter)
     - name: Run Clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-    # Step 6: Run tests
+    # Step 7: Run tests
     - name: Run tests
       run: cargo test --verbose
 
@@ -48,7 +60,7 @@ jobs:
         cargo build --target aarch64-unknown-linux-gnu
         cargo test --target aarch64-unknown-linux-gnu
 
-    # Step 7: Build Docker image (if relevant for your project)
+    # Step 8: Build Docker image (if relevant for your project)
     - name: Build Docker image
       run: |
         docker build -t leonscott543/lightengine .
