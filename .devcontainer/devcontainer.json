@@ -8,9 +8,6 @@
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers/features/python:1": {},
 		"ghcr.io/devcontainers/features/rust:1": {},
-		"ghcr.io/devcontainers/features/vulkan:1": {
-			"version": "latest"
-		}
 		},
 		"ghcr.io/swift-server-community/swift-devcontainer-features/foundationnetworking:1": {},
 		"ghcr.io/devcontainers-extra/features/cmake:1": {
