@@ -23,7 +23,7 @@ jobs:
     - name: Set up Rust
       uses: actions/setup-rust@v4
       with:
-        rust-version: 1.86.0  # Can be adjusted to use a specific version or nightly if needed
+        rust-version: stable  # Can be adjusted to use a specific version or nightly if needed
 
     # Step 3: Cache Cargo dependencies
     - name: Cache Cargo dependencies
