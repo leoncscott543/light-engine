@@ -52,11 +52,11 @@ jobs:
         with:
           context: .
           push: false
-          tags: leonscott543/lightengine:latest
+          tags: leonscott543/light-engine:latest
           platforms: linux/amd64,linux/arm64
 
       - name: Run tests in Docker (x86_64)
-        run: docker run --rm leonscott543/lightengine cargo test --verbose
+        run: docker run --rm leonscott543/light-engine cargo test --verbose
 
   build-windows:
     runs-on: windows-latest
