@@ -1,4 +1,4 @@
-name: Rust
+name: Rust CI/CD Workflow
 
 on:
   push:
@@ -15,8 +15,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+    # Step 1: Checkout the code from the repository
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Step 2: Set up Rust
+    - name: Set up Rust
+      uses: actions/setup-rust@v2
+      with:
+        rust-version: stable  # Can be adjusted to use a specific version or nightly if needed
+
+    # Step 3: Cache Cargo dependencies
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    # Step 4: Build the Rust project
+    - name: Build project
+      run: cargo build --release --verbose
+
+    # Step 5: Run Clippy (Rust linter)
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    # Step 6: Run tests
     - name: Run tests
       run: cargo test --verbose
+
+    # Optional: Cross-compiling tests (e.g., test on multiple platforms)
+    - name: Run tests on multiple targets
+      run: |
+        cargo build --target x86_64-unknown-linux-gnu
+        cargo test --target x86_64-unknown-linux-gnu
+        cargo build --target aarch64-unknown-linux-gnu
+        cargo test --target aarch64-unknown-linux-gnu
+
+    # Step 7: Build Docker image (if relevant for your project)
+    - name: Build Docker image
+      run: |
+        docker build -t yourusername/lightengine .
+
+    # Step 8: Optionally run Docker tests or commands inside a container
+    - name: Run tests inside Docker container
+      run: |
+        docker run --rm yourusername/lightengine cargo test --verbose
+
+    # Step 9: Push Docker image to Docker Hub (optional)
+    - name: Push Docker image to Docker Hub
+      if: github.ref == 'refs/heads/main'  # Only run this on `main` branch
+      run: |
+        echo $DOCKER_PASSWORD | docker login --username $DOCKER_USERNAME --password-stdin
+        docker tag yourusername/lightengine yourusername/lightengine:latest
+        docker push yourusername/lightengine:latest
+
+    # Optional Step 10: Deploy to cloud (AWS, GCP, Azure, etc.)
+    - name: Deploy to AWS ECS (example)
+      if: github.ref == 'refs/heads/main'  # Only deploy from the main branch
+      run: |
+        aws ecr get-login-password --
