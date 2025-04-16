@@ -60,7 +60,6 @@ RUN apt-get update && apt-get install -y \
     clang-tools \
     libncurses5-dev \
     libwebp-dev \
-    libopencl-dev
 
 # Only install multilib and i386 dev packages on amd64
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
