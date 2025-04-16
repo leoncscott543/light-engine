@@ -59,7 +59,7 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     clang-tools \
     libncurses5-dev \
-    libwebp-dev \
+    libwebp-dev
 
 # Only install multilib and i386 dev packages on amd64
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
