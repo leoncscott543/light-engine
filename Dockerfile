@@ -59,9 +59,10 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     clang-tools \
     libncurses5-dev \
-    gcc-multilib \
-    g++-multilib \
-    libc6-dev-i386
+    # Only install multilib and i386 dev packages on amd64
+    && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+        apt-get install -y gcc-multilib g++-multilib libc6-dev-i386; \
+    fi
 
 # Install Rust and configure it (includes cargo and rustc)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -156,6 +157,15 @@ RUN apt-get install -y \
 RUN apt-get install -y \
     kubectl \
     helm
+
+# Set up Docker Buildx
+RUN mkdir -p ~/.docker/cli-plugins \
+    && curl -SL https://github.com/docker/buildx/releases/download/v0.10.0/buildx-v0.10.0.linux-amd64 -o ~/.docker/cli-plugins/docker-buildx \
+    && chmod +x ~/.docker/cli-plugins/docker-buildx
+
+# Build and export multi-arch Docker image
+RUN docker buildx create --use \
+    && docker buildx build --platform linux/amd64,linux/arm64 --tag leonscott543/lightengine:latest --load .
 
 # Default command (override this as necessary)
 CMD ["bash"]
