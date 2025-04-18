@@ -12,5 +12,19 @@ jobs:
     - uses: actions/first-interaction@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-        issue-message: "Message that will be displayed on users' first issue"
-        pr-message: "Message that will be displayed on users' first pull request"
+        issue-message: |
+          🌟 Hey there, Light Hopper! 🌟
+
+          Welcome to the Light Engine project! We're thrilled to have you leap into our universe of cross-platform, polyglot development.
+
+          **Here's what your dev container gives you:**
+          - 🟢 Up-to-date Git (built from source if needed), ready on your `PATH`
+          - 🐍 Python3 & pip3, plus Python language extensions for smooth Python development
+          - 🦀 Rust, common Rust utilities, and all needed dependencies, with Rust language extension for a seamless Rust experience
+
+          **What to do next:**
+          1. Describe your issue with as much detail as you can.
+          2. Share logs, screenshots, or code snippets if possible.
+          3. Hop along with the community—ask questions, suggest features, or just say hi!
+
+          Happy hacking, Light Hopper! 🚀
