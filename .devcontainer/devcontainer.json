@@ -5,7 +5,7 @@
 	// "features": {},
 {
 	// Name for your dev container
-	"name": "light_engine",
+	"name": "light-engine",
 
 	// Use a custom Dockerfile as the single source of truth for all dependencies
 	"dockerFile": "../Dockerfile",

@@ -1,7 +1,7 @@
 # Start with a minimal Ubuntu base image
 FROM ubuntu:20.04
 
-LABEL Name="light_engine" Version="0.1.0" Description="Light Engine simulation, AI, rendering, and cloud support"
+LABEL Name="light-engine" Version="0.1.0" Description="Light Engine simulation, AI, rendering, and cloud support"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
