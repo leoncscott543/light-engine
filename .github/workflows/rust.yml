@@ -13,7 +13,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/leonscott543/light-engine:latest  # <-- dev container image
+      image: ghcr.io/leoncscott543/light-engine:latest  # <-- dev container image
     steps:
       - uses: actions/checkout@v4
 
