@@ -9,11 +9,15 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/leoncscott543/light_engine:latest  # <-- dev container image
+      image: ghcr.io/leoncscott543/light-engine:latest  # <-- dev container image
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +47,8 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    container:
+      image: ghcr.io/leoncscott543/light-engine:latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Rust
@@ -80,6 +86,8 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    container:
+      image: ghcr.io/leoncscott543/light-engine:latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Rust
