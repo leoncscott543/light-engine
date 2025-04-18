@@ -2,7 +2,7 @@
 **/*.rs.bk
 "*.log" 
 "*.swp" 
-# stuff
+"/*requirements0-dev.txt"
 
 # Added by cargo
 
