@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y locales && \
     update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 # --- Install latest Git from source ---
 RUN apt-get update && apt-get install -y \
@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     gettext \
     unzip \
     wget \
+    zlib1g-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN wget https://github.com/git/git/archive/refs/tags/v2.44.0.zip -O /tmp/git.zip && \
     unzip /tmp/git.zip -d /tmp && \
