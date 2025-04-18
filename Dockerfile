@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y \
     lldb \
     libclang-dev \
     clang-tools \
+    curl \     
     # --- Vulkan (cross-platform API, system libs for Linux) ---
     libvulkan-dev \
     vulkan-utils \
