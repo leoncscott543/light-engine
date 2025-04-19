@@ -1,4 +1,4 @@
-name: continuous-integration
+name: CI
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
       - name: Test
         run: cargo test --verbose
 
-  docker:
+  docker-ghcr:
     runs-on: ubuntu-latest
     needs: build-test
     steps:
@@ -64,6 +64,12 @@ jobs:
       - name: Push Docker image
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/light-engine:latest
+
+  docker-hub:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3

@@ -16,15 +16,7 @@ Install the required dependencies:
 ```sh
 sudo apt-get update && sudo apt-get install -y \
     build-essential git curl cmake wget unzip python3-pip \
-    libxcb1-dev libx11-dev libvulkan-dev vulkan-utils \
-    libxcb-xfixes0-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-sync-dev \
-    libx11-xcb-dev libxrandr-dev xcb-proto libxfixes-dev libxcomposite-dev \
-    libxdamage-dev clang llvm lldb libclang-dev libssl-dev zlib1g-dev \
-    libcurl4-openssl-dev libjsoncpp-dev libfreetype6-dev libfontconfig1-dev \
-    libglu1-mesa-dev libtiff-dev libopenal-dev libsndfile1-dev pkg-config \
-    libprotobuf-dev protobuf-compiler libjemalloc-dev libsqlite3-dev libsdl2-dev \
-    libjpeg-dev libpng-dev libassimp-dev libtinyxml-dev lsb-release sudo gnupg2 \
-    apt-transport-https clang-tools libncurses5-dev libwebp-dev libopencl-dev
+
 ```
 
 ##### Windows
