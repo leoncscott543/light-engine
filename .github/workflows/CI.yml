@@ -79,7 +79,7 @@ jobs:
 
       - name: Tag image for Docker Hub
         run: |
-          docker tag ghcr.io/${{ github.repository_owner }}/light-engine:latest yourusername/light-engine:latest
+          docker tag ghcr.io/${{ github.repository_owner }}/light-engine:latest leonscott543/light-engine:latest
 
       - name: Push to Docker Hub
         run: |
