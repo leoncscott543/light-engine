@@ -64,3 +64,17 @@ jobs:
       - name: Push Docker image
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/light-engine:latest
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag image for Docker Hub
+        run: |
+          docker tag ghcr.io/${{ github.repository_owner }}/light-engine:latest yourusername/light-engine:latest
+
+      - name: Push to Docker Hub
+        run: |
+          docker push yourusername/light-engine:latest
