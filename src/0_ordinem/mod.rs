@@ -1,7 +1,11 @@
-pub mod laws;
+pub mod configs;
 pub mod constants;
-pub mod scheduler;
+pub mod electromagneism;
+pub mod fluid;
+pub mod gravity;
 pub mod integrator;
 pub mod logic;
-pub mod dsl;
-
+pub mod optics;
+pub mod radiation;
+pub mod thermodynamics;
+pub mod types;

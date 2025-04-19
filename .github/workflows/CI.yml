@@ -77,10 +77,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/light-engine:latest .
+
       - name: Tag image for Docker Hub
         run: |
-          docker tag ghcr.io/${{ github.repository_owner }}/light-engine:latest leoncscott543/light-engine:latest
+          docker tag ghcr.io/${{ github.repository_owner }}/light-engine:latest ${{ secrets.DOCKERHUB_USERNAME }}/light-engine:latest
 
       - name: Push to Docker Hub
         run: |
-          docker push yourusername/light-engine:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/light-engine:latest
