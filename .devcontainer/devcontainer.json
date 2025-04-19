@@ -17,7 +17,7 @@
 	},
 
 	// Forward commonly used ports (add or remove as needed)
-    "forwardPorts": [8080],
+    "forwardPorts": [8080]
 
 
 	// Optionally, run a command after the container is created
