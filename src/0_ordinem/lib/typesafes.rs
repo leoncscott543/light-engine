@@ -1,4 +1,4 @@
-// types.rs
+// typesafes.rs
 // This file defines a collection of strongly-typed wrappers around `f64` to represent various physical quantities, constants, and units. 
 // These types provide clarity and type safety when working with scientific and engineering calculations.
 
