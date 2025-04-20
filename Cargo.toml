@@ -10,6 +10,9 @@ winit = "0.29"         # Cross-platform window creation/event loop
 raw-window-handle = "0.6" # For surface creation with ash/wgpu
 log = "0.4"            # Logging facade
 env_logger = "0.11"    # Logging implementation
+rand = "0.8" # Random number generation library
 
 [build-dependencies] # Dependencies required only during the build process, such as tools for code generation, compiling native components, or other build-time tasks.
 cmake = "0.1.49" # provides rust ability to natively comiple and build C/C++ native libraries and components. will build natively across windows, macos, linux
+
+
