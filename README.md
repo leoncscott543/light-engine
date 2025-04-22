@@ -5,11 +5,10 @@
 
 Light Engine is a provocation. A philosophical leap. A technological experiment born of awe — not just at what can be rendered, but at the very essence of what *should* be simulated.
 
-We do not seek to imitate reality. We aim to *reconstruct* it.
-
-This is not a game engine.
-It is not a toybox of visual tricks.
-It is a new operating system for simulation itself — one that assumes from first principles that the world is composed of particles, of light, of mass and energy and transformation — and that every one of these elements deserves to be computed with integrity.
+I'm not very interested in the pursuit of reality immitation. My aim is to *reconstruct* onto a lower dimention.... a computer.
+0
+This is not merely a game engine.
+light engine is a open-source generative causal rendering + simulation enviornment. Built ENTIRELY on a new dynamic primitive type, a "particle", governed only by the laws of nature on a realtime clock + tick scheduler. All of the world's real phenemana is near perfectly simulable (in theory) provided you have the necessary compute capbilites. The aim is to build a structural framework for simulating reality in the most non-trivial way possible; I'm betting on a future where edge + quantum + photonic system architecture marry. 
 
 ---
 
@@ -19,13 +18,15 @@ It is a new operating system for simulation itself — one that assumes from fir
 
 ---
 
-Imagine a simulation where you cannot cheat. Where light isn't drawn — it's simulated. Where a breeze across a surface isn't faked with math noise but emerges from pressure gradients and heat differentials. Where a rock shatters not because it was pre-scripted to, but because its internal material structure, tension, and kinetic energy thresholds were actually exceeded.
+Imagine a simulation where you cannot cheat. Where light isn't drawn and photon's aren't approximated and path traced— they're individually simulated. Where a breeze across a surface isn't faked but emerges from pressure gradients and heat differentials. Where a rendered rock object shatters not because it was pre-scripted to, but because its internal material structure, tension, and kinetic energy thresholds were actually exceeded.
 
-This is the promise of Light.
+This is the promise of light.
 
-We believe in the computability of the universe.  
-We believe that simulation should not be limited by today's constraints, but inspired by tomorrow's possibilities.  
-We believe that beauty — true beauty — is the product of *truth made visible.*
+light engine hinges on a belief construct:
+- Reality is goverened by strict natural order, but human conceptualization + time are the limiting factors in the perception of order. 
+- The future of advanced solvers is qubit and the future of data processing is light speed (photonic). 
+- True beauty is the deep integration of nature and mind. In other words, true beauty is not surface-level only.
+- Scienticic and engineering simulation should be generalized so that domain specific problem sets can be solved with near-limitless causal parameters. 
 
 ---
 
@@ -33,7 +34,7 @@ We believe that beauty — true beauty — is the product of *truth made visible
 
 ### 1. Physical Reality Must Be Simulated, Not Sketched
 
-Light Engine is committed to building an actual model of reality — from particle dynamics to photon-matter interactions — not the illusion of reality. That means simulating:
+light engine is committed to building an actual model of reality — from particle dynamics to photon-matter interactions — not the illusion of reality. That means simulating:
 - Collisions with momentum transfer
 - Photon bounce and scatter
 - Material deformation, heat, and stress
