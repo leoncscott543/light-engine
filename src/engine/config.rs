@@ -28,3 +28,9 @@ impl EngineConfig {
         }
     }
 }
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self::new(60.0) // Default to 60 ticks per second
+    }
+}

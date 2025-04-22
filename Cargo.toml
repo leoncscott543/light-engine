@@ -4,13 +4,17 @@ version = "0.1.0" # The current version of the package.
 edition = "2024" # Specifies the Rust edition being used (e.g., 2024 edition).
 
 [dependencies] # A section to list the package dependencies.
-ash = "0.37"
-wgpu = "0.19"
-winit = "0.29"         # Cross-platform window creation/event loop
+ash = "0.38"
+wgpu = "0.17.0"
+winit = "0.28"         # Cross-platform window creation/event loop
 raw-window-handle = "0.6" # For surface creation with ash/wgpu
 log = "0.4"            # Logging facade
 env_logger = "0.11"    # Logging implementation
-rand = "0.8" # Random number generation library
+rand = "0.9.1" # Random number generation library
+pyo3 = { version = "0.24.2", features = ["extension-module"] } # Python bindings for Rust, allowing integration with Python
+cpal = "0.15.3"
+pollster = "0.4.0"
+bytemuck = "1.13.1"
 
 [build-dependencies] # Dependencies required only during the build process, such as tools for code generation, compiling native components, or other build-time tasks.
 cmake = "0.1.49" # provides rust ability to natively comiple and build C/C++ native libraries and components. will build natively across windows, macos, linux
