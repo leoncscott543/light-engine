@@ -13,7 +13,8 @@
 	"features": {
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers/features/rust:1": {},
-		"ghcr.io/devcontainers/features/python:1": {}
+		"ghcr.io/devcontainers/features/python:1": {},
+		"postCreateCommand": "curl -L https://ziglang.org/builds/zig-linux-x86_64-0.12.0-dev.1446+4e5b33fd2.tar.xz | tar -xJ && mv zig-linux-x86_64-* /zig && ln -s /zig/zig /usr/local/bin/zig"
 	},
 
 	// Forward commonly used ports (add or remove as needed)

@@ -6,9 +6,7 @@ pub mod ordinem;
 pub mod causality;
 pub mod manifest;         
 pub mod darai;             
-pub mod beam;
 pub mod aria;
-pub mod python_bridge;
 
 
 // src/lib.rs

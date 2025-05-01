@@ -3,16 +3,16 @@
 // Light Engine — Canonical Runtime Entry Point
 // No test logic. Initializes systems and hands off to orchestrator.
 // =====================================================================================
-
+mod aria;
 mod engine;
+mod causality;
+mod cloud;
+mod darai;
+mod kits;
+mod lab;
+mod manifest;
 mod matter;
 mod ordinem;
-mod causality;
-mod manifest;         
-mod darai;             
-mod beam;
-mod aria;
-mod python_bridge;
 
 use engine::clock::Clock;
 use engine::config::EngineConfig;
