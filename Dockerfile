@@ -63,11 +63,6 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# --- Install Zig programming language ---
-RUN curl -L https://ziglang.org/builds/zig-linux-x86_64-0.12.0-dev.1446+4e5b33fd2.tar.xz | tar -xJ \
-    && mv zig-linux-x86_64-* /opt/zig \
-    && ln -s /opt/zig/zig /usr/local/bin/zig
    
 
 # --- Install kubectl (Kubernetes CLI, optional, cross-platform tool) ---

@@ -1,0 +1,10 @@
+# Ignore build artifacts
+target
+.git
+.idea
+.vscode
+.DS_Store
+*.log
+*.lock
+*.tmp
+
