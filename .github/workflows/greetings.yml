@@ -15,7 +15,7 @@ jobs:
         issue-message: |
           🌟 Hey there, Light Hopper! 🌟
 
-          Welcome to the Light Engine project! We're thrilled to have you leap into our universe of cross-platform, polyglot development.
+          Welcome to the Light Engine project! We're thrilled to have you leap into our universe
 
           **Here's what your dev container gives you:**
           - 🟢 Up-to-date Git (built from source if needed), ready on your `PATH`

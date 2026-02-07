@@ -8,7 +8,7 @@ Light Engine is a provocation. A philosophical leap. A technological experiment 
 I'm not very interested in the pursuit of reality immitation. My aim is to *reconstruct* onto a lower dimention.... a computer.
 0
 This is not merely a game engine.
-light engine is a open-source generative causal rendering + simulation enviornment. Built ENTIRELY on a new dynamic primitive type, a "particle", governed only by the laws of nature on a realtime clock + tick scheduler. All of the world's real phenemana is near perfectly simulable (in theory) provided you have the necessary compute capbilites. The aim is to build a structural framework for simulating reality in the most non-trivial way possible; I'm betting on a future where edge + quantum + photonic system architecture marry. 
+light engine is a open-source generative causal rendering + simulation enviornment. Built ENTIRELY on a new dynamic primitive type, a "particle", governed only by the laws of nature.... The fun part is making possible something that 'seems' like a complete work of fiction. 
 
 ---
 
@@ -18,15 +18,16 @@ light engine is a open-source generative causal rendering + simulation enviornme
 
 ---
 
-Imagine a simulation where you cannot cheat. Where light isn't drawn and photon's aren't approximated and path traced— they're individually simulated. Where a breeze across a surface isn't faked but emerges from pressure gradients and heat differentials. Where a rendered rock object shatters not because it was pre-scripted to, but because its internal material structure, tension, and kinetic energy thresholds were actually exceeded.
+Imagine a simulation where you cannot cheat... where object rendering isn't a polygomal illusion and physics isn't a patched-on approximation. Where a breeze across a surface isn't faked but emerges from pressure gradients and heat differentials. Where a rendered rock object shatters not because it was pre-scripted to, but because its internal material structure, tension, and kinetic energy thresholds were actually exceeded. What if we could make a model of reality that for all tense and purposes, is a 1 to 1 isomorphic clone of nature in a different medium. More on that work "isomorphic" later. 
 
-This is the promise of light.
+This is the promise of Light.
 
-light engine hinges on a belief construct:
-- Reality is goverened by strict natural order, but human conceptualization + time are the limiting factors in the perception of order. 
-- The future of advanced solvers is qubit and the future of data processing is light speed (photonic). 
+light engine hinges on these 4 axiems:
+- If a particular solution does not bring humanity peace and joy, then it is a colossal waste of time and resources. 
+- Reality is goverened by strict natural order, but human conceptualization + time are the limiting factors in this perception of order. 
+- The future of advanced solvers is qubit based logic (quantum), and the future of data processing is at the light speed (photonic). 
 - True beauty is the deep integration of nature and mind. In other words, true beauty is not surface-level only.
-- Scienticic and engineering simulation should be generalized so that domain specific problem sets can be solved with near-limitless causal parameters. 
+- Scienticic and engineering simulation should be generalized so that domain specific problem sets can be solved with near-limitless parameters. 
 
 ---
 
@@ -36,31 +37,30 @@ light engine hinges on a belief construct:
 
 light engine is committed to building an actual model of reality — from particle dynamics to photon-matter interactions — not the illusion of reality. That means simulating:
 - Collisions with momentum transfer
-- Photon bounce and scatter
+- Photon absorption and refraction 
 - Material deformation, heat, and stress
+- Spacetime curvature (Relativity)
 
-This isn't a compromise between visual fidelity and computation. It's a new way of understanding them as the same thing.
+This isn't a compromise between visual fidelity and computation. This is an entirely new way of thinking about modeling and computational rendering. 
 
 ### 2. Particle Is the New Primitive
 
-At the center of Light lies the `particle` — a deeply programmable, extensible datatype that encapsulates physical properties:
+At the center of Light rests the `particle` — a deeply programmable, extensible, abstract datatype that encapsulates ALL of the nature's known properties:
 - Mass, temperature, spin, charge
 - Velocity, position, acceleration
-- Surface reflectance, chemical state, bonding logic
-
-Particles bond into **materials**, materials form **things**, and things exist in **environments** — all nested, all causal.
+- Surface reflectance, chemical state, bonding logic ect.... 
 
 ### 3. Light Is a Physical Participant
 
 No shaders. No baked lighting. No approximations.
 
-In Light, photons are particles too. They carry energy. They obey thermodynamic principles. They bounce, diffract, reflect, and are absorbed.
+In Light, photons are `particles` primitives too. They carry energy and a velocity. They obey thermodynamic principles. 
 
 You don’t render shadows — you simulate occlusion.
 
 You don’t fake color — you simulate wavelength absorption and emission.
 
-Light is not a metaphor. It is a participant in this world.
+Light is not a metaphor. It is a key participant in this world. Much more, its the window into this simulated reality for the user. 
 
 ### 4. Materials Are Programmable
 
@@ -72,9 +72,11 @@ You can define a material that does not exist in our universe and see how it beh
 
 This is programmable matter, defined not by textures or parameters, but by what particles compose it, how they bind, how they fail under pressure, and how they respond to energy transfer.
 
+However, unlike a typical graphics engine, these assets are not made in blender or defined by a simple ECS type system.... instead, they are synthesized and stored as unique complex structures. 
+
 ### 5. Time and Energy Govern All
 
-There is no game loop. There is no artificial tick rate. Time in Light is causal. Energy drives change.
+There is no game loop. There is no artificial tick rate. Time in Light is causal. Physical causality drives change which renders realative time. 
 
 You can simulate seconds. You can simulate centuries.
 
