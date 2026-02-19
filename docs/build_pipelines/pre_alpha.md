@@ -7,7 +7,7 @@ This document defines the pre-alpha scaffolding and system bootstrap phase for L
 ## 🚦 Goals of Pre-Alpha
 
 - [working] Fully functional Rust project with modular tree
-- [pending] CLI launcher + tick scheduler + ECS baseline
+- [pending] CLI launcher
 - [pending] Docker dev environment (GPU, WASM, and CI capable)
 - [pending] Multi-platform build: native, WASM, cloud
 - [pending] Verified startup path and .beam export/test simulation
