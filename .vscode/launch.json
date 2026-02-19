@@ -7,26 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'light_engine'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=light_engine"
-                ],
-                "filter": {
-                    "name": "light_engine",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'light_engine'",
+            "name": "Debug 'light_engine' executable",
             "cargo": {
                 "args": [
                     "build",
