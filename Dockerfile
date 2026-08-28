@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     wget \
     curl \
+    libasound2-dev \
     zlib1g-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN wget https://github.com/git/git/archive/refs/tags/v2.44.0.zip -O /tmp/git.zip && \
