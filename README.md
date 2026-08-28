@@ -5,4 +5,4 @@
 
 ## Project Notes
 
-See [NOTES.md](NOTES.md) for the living project notebook, research directions, architecture decisions, and next priorities.
+See [NOTEPAD.md](NOTEPAD.md) for the living project notebook, research directions, architecture decisions, and next priorities.
