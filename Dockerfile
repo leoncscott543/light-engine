@@ -48,22 +48,19 @@ RUN apt-get update && apt-get install -y \
     libclang-dev \
     clang-tools \
     curl \
-    # --- Vulkan (cross-platform API, system libs for Linux) ---
     libvulkan-dev \
     vulkan-utils \
-    # --- Protobuf (for ML/data, cross-platform) ---
     libprotobuf-dev \
     protobuf-compiler \
-    # --- SQLite (cross-platform DB) ---
     libsqlite3-dev \
-    # --- Compression and crypto (cross-platform) ---
     zlib1g-dev \
     libssl-dev \
     ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # --- Install kubectl (Kubernetes CLI, optional, cross-platform tool) ---
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+ARG TARGETARCH=amd64
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${TARGETARCH}/kubectl" \
     && install -m 0755 kubectl /usr/local/bin/kubectl \
     && rm kubectl
 
