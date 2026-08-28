@@ -5,6 +5,5 @@ target
 .vscode
 .DS_Store
 *.log
-*.lock
 *.tmp
 

@@ -1,7 +1,7 @@
-# Start with a minimal Ubuntu base image
+# Development container for the Rust alpha
 FROM ubuntu:20.04
 
-LABEL Name="light-engine" Version="0.1.0" Description="Light Engine simulation, AI, rendering, and cloud support"
+LABEL Name="light-engine" Version="0.1.0"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -15,66 +15,16 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-# --- Install latest Git from source ---
+# --- Basic build tools ---
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libssl-dev \
-    libcurl4-openssl-dev \
-    libexpat1-dev \
-    gettext \
-    unzip \
-    wget \
     curl \
-    libasound2-dev \
-    zlib1g-dev \
+    pkg-config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN wget https://github.com/git/git/archive/refs/tags/v2.44.0.zip -O /tmp/git.zip && \
-    unzip /tmp/git.zip -d /tmp && \
-    cd /tmp/git-2.44.0 && \
-    make prefix=/usr/local all && \
-    make prefix=/usr/local install && \
-    cd / && rm -rf /tmp/git*
 
 # --- Install Rust toolchain (with Cargo and utilities) ---
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# --- Core cross-platform build tools and utilities ---
-RUN apt-get update && apt-get install -y \
-    cmake \
-    sudo \
-    pkg-config \
-    clang \
-    llvm \
-    lldb \
-    libclang-dev \
-    clang-tools \
-    curl \
-    libvulkan-dev \
-    vulkan-utils \
-    libprotobuf-dev \
-    protobuf-compiler \
-    libsqlite3-dev \
-    zlib1g-dev \
-    libssl-dev \
-    ca-certificates \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# --- Install kubectl (Kubernetes CLI, optional, cross-platform tool) ---
-ARG TARGETARCH=amd64
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${TARGETARCH}/kubectl" \
-    && install -m 0755 kubectl /usr/local/bin/kubectl \
-    && rm kubectl
-
-# --- Only install multilib and i386 dev packages on amd64 (optional, for cross-compiling) ---
-RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-      apt-get update && apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 && \
-      apt-get clean && rm -rf /var/lib/apt/lists/*; \
-    fi
-
 WORKDIR /app
 COPY . /app
-
-EXPOSE 8080
-
-CMD ["bash"]
