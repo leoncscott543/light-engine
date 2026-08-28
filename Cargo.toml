@@ -11,7 +11,6 @@ raw-window-handle = "0.6" # For surface creation with ash/wgpu
 log = "0.4"            # Logging facade
 env_logger = "0.11"    # Logging implementation
 rand = "0.9.1" # Random number generation library
-pyo3 = { version = "0.24.2", features = ["extension-module"] } # Python bindings for Rust, allowing integration with Python
 cpal = "0.15.3"
 pollster = "0.4.0"
 bytemuck = "1.13.1"

@@ -19,7 +19,6 @@ jobs:
 
           **Here's what your dev container gives you:**
           - 🟢 Up-to-date Git (built from source if needed), ready on your `PATH`
-          - 🐍 Python3 & pip3, plus Python language extensions for smooth Python development
           - 🦀 Rust, common Rust utilities, and all needed dependencies, with Rust language extension for a seamless Rust experience
 
           **What to do next:**

@@ -24,12 +24,6 @@ updates:
     schedule:
       interval: "daily"
 
-  # Python (requirements.txt, pip, pipenv, poetry)
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "daily"
-
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

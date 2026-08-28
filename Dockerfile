@@ -37,11 +37,9 @@ RUN wget https://github.com/git/git/archive/refs/tags/v2.44.0.zip -O /tmp/git.zi
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# --- Core cross-platform build tools, Python, and utilities ---
+# --- Core cross-platform build tools and utilities ---
 RUN apt-get update && apt-get install -y \
     cmake \
-    python3 \
-    python3-pip \
     sudo \
     pkg-config \
     clang \
@@ -49,7 +47,7 @@ RUN apt-get update && apt-get install -y \
     lldb \
     libclang-dev \
     clang-tools \
-    curl \     
+    curl \
     # --- Vulkan (cross-platform API, system libs for Linux) ---
     libvulkan-dev \
     vulkan-utils \
@@ -63,7 +61,6 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-   
 
 # --- Install kubectl (Kubernetes CLI, optional, cross-platform tool) ---
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
@@ -75,9 +72,6 @@ RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
       apt-get update && apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 && \
       apt-get clean && rm -rf /var/lib/apt/lists/*; \
     fi
-
-# --- (Optional) Install Python ML libraries if you need them for FFI/wrappers ---
-RUN pip3 install --no-cache-dir tensorflow torch torchvision torchaudio
 
 WORKDIR /app
 COPY . /app
