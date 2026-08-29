@@ -7,7 +7,7 @@ An experimental Rust kernel for SIMD-oriented, structure-preserving particle sim
 
 The first phase is intentionally narrow:
 
-- Multivector-valued particle state using grades 0 through 2
+- Multivector-valued particle state using grades 0 through 4
 - Spatially ordered AoSoA storage for cache locality and SIMD execution
 - Hamiltonian evolution on a defined symplectic state space
 - Energy, momentum, determinism, and numerical-stability validation
