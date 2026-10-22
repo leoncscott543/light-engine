@@ -1,9 +1,10 @@
 [package]
 name = "light_mock"
-description = "Mock-data SimClient used as a stand-in while the Light kernel is built."
+description = "Mock-data SimClient and synthetic bench workloads used as stand-ins while the Light kernel is built."
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 
 [dependencies]
+light_bench.workspace = true
 light_contracts.workspace = true

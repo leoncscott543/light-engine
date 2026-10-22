@@ -79,7 +79,13 @@ impl<'a> Button<'a> {
         (self.label.chars().count() + key + 2) as u16
     }
 
-    pub fn render(&self, frame: &mut Frame, area: Rect, mouse: Option<(u16, u16)>, hits: &mut HitMap) {
+    pub fn render(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        mouse: Option<(u16, u16)>,
+        hits: &mut HitMap,
+    ) {
         let hover = self.enabled && hovered(mouse, area);
         let (bg, fg) = match (self.enabled, self.kind, hover) {
             (false, ..) => (theme::SURFACE, theme::TEXT_FAINT),
@@ -92,8 +98,15 @@ impl<'a> Button<'a> {
         let style = Style::new().bg(bg).fg(fg).add_modifier(Modifier::BOLD);
         let mut spans = vec![Span::styled(format!(" {}", self.label), style)];
         if let Some(key) = self.key {
-            let key_fg = if self.enabled { theme::GOLD } else { theme::TEXT_FAINT };
-            spans.push(Span::styled(format!(" {key}"), Style::new().bg(bg).fg(key_fg)));
+            let key_fg = if self.enabled {
+                theme::GOLD
+            } else {
+                theme::TEXT_FAINT
+            };
+            spans.push(Span::styled(
+                format!(" {key}"),
+                Style::new().bg(bg).fg(key_fg),
+            ));
         }
         spans.push(Span::styled(" ", style));
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
@@ -128,28 +141,36 @@ pub fn button_row(
 }
 
 /// Bordered card showing a headline value; clicking it triggers `action`.
-pub fn stat_card(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    value: Line,
-    detail: Line,
-    action: Action,
-    mouse: Option<(u16, u16)>,
-    hits: &mut HitMap,
-) {
-    let hover = hovered(mouse, area);
-    let block = panel(title, hover);
-    let block = if hover {
-        block.style(Style::new().bg(theme::SURFACE).fg(theme::TEXT))
-    } else {
-        block
-    };
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    let text = vec![value, detail];
-    frame.render_widget(Paragraph::new(text).alignment(Alignment::Center), centered_rows(inner, 2));
-    hits.push(area, action);
+pub struct StatCard<'a> {
+    pub title: &'a str,
+    pub value: Line<'a>,
+    pub detail: Line<'a>,
+    pub action: Action,
+}
+
+impl StatCard<'_> {
+    pub fn render(
+        self,
+        frame: &mut Frame,
+        area: Rect,
+        mouse: Option<(u16, u16)>,
+        hits: &mut HitMap,
+    ) {
+        let hover = hovered(mouse, area);
+        let block = panel(self.title, hover);
+        let block = if hover {
+            block.style(Style::new().bg(theme::SURFACE).fg(theme::TEXT))
+        } else {
+            block
+        };
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        frame.render_widget(
+            Paragraph::new(vec![self.value, self.detail]).alignment(Alignment::Center),
+            centered_rows(inner, 2),
+        );
+        hits.push(area, self.action);
+    }
 }
 
 /// `label  value` pair as a line.

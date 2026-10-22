@@ -1,10 +1,11 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Display;
 use std::time::{Duration, Instant};
 
 use light_contracts::{
-    BackendEvent, BackendInfo, BenchDescriptor, BenchEvent, BenchId, BenchRunConfig, BenchStats,
-    ClientError, Integrator, Layout, LogEntry, LogLevel, ProcessId, ProcessInfo, Series,
-    SimClient, SimCommand, SimConfig, SimSnapshot, SimStatus,
+    BackendEvent, BackendInfo, BenchClient, BenchDescriptor, BenchEvent, BenchId, BenchRunConfig,
+    BenchStats, Integrator, Layout, LogEntry, LogLevel, ProcessId, ProcessInfo, Series, SimClient,
+    SimCommand, SimConfig, SimSnapshot, SimStatus,
 };
 
 use crate::action::Action;
@@ -122,7 +123,9 @@ impl ConfigField {
                 let i = nearest(&DT, config.dt);
                 config.dt = DT[step_index(i, DT.len(), delta)];
             }
-            Self::Integrator => config.integrator = cycle(&Integrator::ALL, config.integrator, delta),
+            Self::Integrator => {
+                config.integrator = cycle(&Integrator::ALL, config.integrator, delta)
+            }
             Self::Layout => config.layout = cycle(&Layout::ALL, config.layout, delta),
             Self::Rate => config.target_rate = cycle(&RATES, config.target_rate, delta),
             Self::Seed => config.seed = config.seed.wrapping_add_signed(i64::from(delta)),
@@ -204,6 +207,7 @@ pub enum RunState {
     Running,
     Finished,
     Cancelled,
+    Failed,
 }
 
 pub struct BenchRecord {
@@ -211,6 +215,7 @@ pub struct BenchRecord {
     pub state: RunState,
     pub samples: Vec<Duration>,
     pub stats: Option<BenchStats>,
+    pub error: Option<String>,
 }
 
 impl BenchRecord {
@@ -226,6 +231,7 @@ pub struct BenchView {
     pub list: Vec<BenchDescriptor>,
     pub selected: usize,
     pub config: BenchRunConfig,
+    /// Mirrors [`BenchClient::active`]; the runtime is the source of truth.
     pub active: Option<BenchId>,
     pub records: HashMap<BenchId, BenchRecord>,
 }
@@ -238,7 +244,6 @@ impl BenchView {
     fn apply(&mut self, event: BenchEvent) {
         match event {
             BenchEvent::Started { id, config } => {
-                self.active = Some(id.clone());
                 self.records.insert(
                     id,
                     BenchRecord {
@@ -246,6 +251,7 @@ impl BenchView {
                         state: RunState::Running,
                         samples: Vec::with_capacity(config.samples as usize),
                         stats: None,
+                        error: None,
                     },
                 );
             }
@@ -259,13 +265,17 @@ impl BenchView {
                     r.state = RunState::Finished;
                     r.stats = stats;
                 }
-                self.active = None;
             }
             BenchEvent::Cancelled { id } => {
                 if let Some(r) = self.records.get_mut(&id) {
                     r.state = RunState::Cancelled;
                 }
-                self.active = None;
+            }
+            BenchEvent::Failed { id, reason } => {
+                if let Some(r) = self.records.get_mut(&id) {
+                    r.state = RunState::Failed;
+                    r.error = Some(reason);
+                }
             }
         }
     }
@@ -325,8 +335,10 @@ pub struct Toast {
 }
 
 pub struct App {
-    client: Box<dyn SimClient>,
+    sim_client: Box<dyn SimClient>,
+    bench_client: Box<dyn BenchClient>,
     pub backend: BackendInfo,
+    pub bench_backend: BackendInfo,
     pub running: bool,
     pub tab: Tab,
     pub show_help: bool,
@@ -341,15 +353,20 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(client: Box<dyn SimClient>) -> Self {
-        let backend = client.info();
-        let snapshot = client.snapshot();
-        let draft = snapshot.as_ref().map_or_else(SimConfig::default, |s| s.config);
-        let benches = client.benches();
-        let active = client.active_bench();
+    pub fn new(sim_client: Box<dyn SimClient>, bench_client: Box<dyn BenchClient>) -> Self {
+        let backend = sim_client.info();
+        let bench_backend = bench_client.info();
+        let snapshot = sim_client.snapshot();
+        let draft = snapshot
+            .as_ref()
+            .map_or_else(SimConfig::default, |s| s.config);
+        let benches = bench_client.benches();
+        let active = bench_client.active();
         let mut app = Self {
-            client,
+            sim_client,
+            bench_client,
             backend,
+            bench_backend,
             running: true,
             tab: Tab::Overview,
             show_help: false,
@@ -404,11 +421,9 @@ impl App {
         self.sim.snapshot.is_some()
     }
 
-    /// Pumps the backend once. Call every frame.
+    /// Pumps both backends once. Call every frame.
     pub fn tick(&mut self) {
-        for event in self.client.poll() {
-            self.on_backend(event);
-        }
+        self.pump();
         let now = Instant::now();
         if self
             .procs
@@ -417,7 +432,11 @@ impl App {
         {
             self.refresh_processes(now);
         }
-        if self.toast.as_ref().is_some_and(|t| t.at.elapsed() > TOAST_TTL) {
+        if self
+            .toast
+            .as_ref()
+            .is_some_and(|t| t.at.elapsed() > TOAST_TTL)
+        {
             self.toast = None;
         }
     }
@@ -430,6 +449,16 @@ impl App {
                 .frame_interval_ms
                 .push((now - last).as_secs_f64() * 1e3);
         }
+    }
+
+    fn pump(&mut self) {
+        for event in self.sim_client.poll() {
+            self.on_backend(event);
+        }
+        for event in self.bench_client.poll() {
+            self.on_bench(event);
+        }
+        self.bench.active = self.bench_client.active();
     }
 
     fn on_backend(&mut self, event: BackendEvent) {
@@ -449,13 +478,49 @@ impl App {
                 }
                 self.sim.snapshot = snapshot;
             }
-            BackendEvent::Bench(event) => self.bench.apply(event),
             BackendEvent::Log(entry) => self.logs.push(entry),
         }
     }
 
+    fn on_bench(&mut self, event: BenchEvent) {
+        let line = match &event {
+            BenchEvent::Started { id, config } => Some((
+                LogLevel::Info,
+                format!(
+                    "{id} started: {} samples x {} iters, {} warmup",
+                    config.samples, config.iters_per_sample, config.warmup_iters
+                ),
+            )),
+            BenchEvent::Sample { .. } => None,
+            BenchEvent::Finished { id, stats } => Some((
+                LogLevel::Info,
+                match stats {
+                    Some(s) => format!(
+                        "{id} finished: mean {:?} p99 {:?} ({} samples)",
+                        s.mean, s.p99, s.count
+                    ),
+                    None => format!("{id} finished with no samples"),
+                },
+            )),
+            BenchEvent::Cancelled { id } => Some((LogLevel::Warn, format!("{id} cancelled"))),
+            BenchEvent::Failed { id, reason } => {
+                Some((LogLevel::Error, format!("{id} failed: {reason}")))
+            }
+        };
+        if let Some((level, message)) = line {
+            self.logs.push(LogEntry {
+                at: self.uptime(),
+                level,
+                source: "bench".into(),
+                message,
+            });
+        }
+        self.bench.apply(event);
+    }
+
     fn refresh_processes(&mut self, now: Instant) {
-        self.procs.list = self.client.processes();
+        self.procs.list = self.sim_client.processes();
+        self.procs.list.extend(self.bench_client.processes());
         for p in &self.procs.list {
             self.procs
                 .cpu_history
@@ -485,18 +550,16 @@ impl App {
         });
     }
 
-    fn report(&mut self, result: Result<(), ClientError>) {
+    fn report<E: Display>(&mut self, result: Result<(), E>) {
         if let Err(err) = result {
             self.notify(LogLevel::Error, err.to_string());
         }
-        // Commands mutate synchronously; drain their events right away.
-        for event in self.client.poll() {
-            self.on_backend(event);
-        }
+        // Drain whatever the command produced right away.
+        self.pump();
     }
 
     fn command(&mut self, command: SimCommand) {
-        let result = self.client.command(command);
+        let result = self.sim_client.command(command);
         self.report(result);
     }
 
@@ -548,12 +611,12 @@ impl App {
 
             Action::RunBench => {
                 if let Some(id) = self.bench.selected().map(|d| d.id.clone()) {
-                    let result = self.client.run_bench(&id, self.bench.config);
+                    let result = self.bench_client.run(&id, self.bench.config);
                     self.report(result);
                 }
             }
             Action::CancelBench => {
-                let result = self.client.cancel_bench();
+                let result = self.bench_client.cancel();
                 self.report(result);
             }
             Action::AdjustSamples(d) => {
@@ -575,7 +638,10 @@ impl App {
             }
             Action::CycleLogLevel => {
                 let all = LogLevel::ALL;
-                let i = all.iter().position(|l| *l == self.logs.min_level).unwrap_or(0);
+                let i = all
+                    .iter()
+                    .position(|l| *l == self.logs.min_level)
+                    .unwrap_or(0);
                 self.update(Action::SetLogLevel(all[(i + 1) % all.len()]));
             }
             Action::ToggleFollow => {
@@ -594,7 +660,9 @@ impl App {
             if len == 0 {
                 0
             } else {
-                (i as isize).saturating_add(delta).clamp(0, len as isize - 1) as usize
+                (i as isize)
+                    .saturating_add(delta)
+                    .clamp(0, len as isize - 1) as usize
             }
         };
         match self.tab {
@@ -614,7 +682,8 @@ impl App {
                 // Up (negative) scrolls toward older entries.
                 let scroll = (self.logs.scroll as isize)
                     .saturating_sub(delta)
-                    .clamp(0, total.saturating_sub(1) as isize) as usize;
+                    .clamp(0, total.saturating_sub(1) as isize)
+                    as usize;
                 self.logs.scroll = scroll;
                 self.logs.follow = scroll == 0;
             }
@@ -645,13 +714,27 @@ impl SimView {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod testing {
+    use light_bench::BenchRuntime;
     use light_mock::MockClient;
 
+    use super::App;
+
+    /// An app wired to the mock sim and a bench runtime over mock workloads.
+    pub fn mock_app(seed: u64) -> App {
+        App::new(
+            Box::new(MockClient::new(seed)),
+            Box::new(BenchRuntime::new(light_mock::bench_registry(seed))),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
     use super::*;
 
     fn app() -> App {
-        App::new(Box::new(MockClient::new(1)))
+        testing::mock_app(1)
     }
 
     #[test]
@@ -660,14 +743,23 @@ mod tests {
         assert!(!app.has_session());
         for _ in 0..Tab::ALL.len() {
             app.update(Action::NextTab);
-            for a in [Action::Up, Action::Down, Action::PageDown, Action::Home, Action::End] {
+            for a in [
+                Action::Up,
+                Action::Down,
+                Action::PageDown,
+                Action::Home,
+                Action::End,
+            ] {
                 app.update(a);
             }
             app.tick();
         }
         assert_eq!(app.tab, Tab::Overview);
         app.update(Action::Step(1));
-        assert!(app.toast.is_some(), "stepping without a session reports an error");
+        assert!(
+            app.toast.is_some(),
+            "stepping without a session reports an error"
+        );
     }
 
     #[test]
@@ -690,21 +782,42 @@ mod tests {
         app.update(Action::AdjustField(ConfigField::Particles, 1));
         assert_eq!(app.sim.pending_fields(), vec![ConfigField::Particles]);
         app.update(Action::AdjustField(ConfigField::Timestep, 1));
-        assert_eq!(app.sim.snapshot.as_ref().unwrap().config.dt, app.sim.draft.dt);
+        assert_eq!(
+            app.sim.snapshot.as_ref().unwrap().config.dt,
+            app.sim.draft.dt
+        );
         app.update(Action::RecreateSession);
         assert!(app.sim.pending_fields().is_empty());
     }
 
     #[test]
-    fn bench_run_is_tracked() {
+    fn bench_runs_on_its_own_runtime() {
         let mut app = app();
         app.update(Action::GoTo(Tab::Benchmarks));
         app.update(Action::RunBench);
         let id = app.bench.selected().unwrap().id.clone();
         assert_eq!(app.bench.active.as_ref(), Some(&id));
+        // Benchmarks run without any simulation session.
+        assert!(!app.has_session());
+
+        app.update(Action::RunBench);
+        assert!(app.toast.is_some(), "a second run is rejected while busy");
+
         app.update(Action::CancelBench);
-        assert_eq!(app.bench.records[&id].state, RunState::Cancelled);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while app.bench.active.is_some() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(2));
+            app.tick();
+        }
         assert!(app.bench.active.is_none());
+        assert_eq!(app.bench.records[&id].state, RunState::Cancelled);
+        assert!(
+            app.procs
+                .list
+                .iter()
+                .any(|p| p.kind == light_contracts::ProcessKind::Bench),
+            "bench runtime reports its worker"
+        );
     }
 
     #[test]

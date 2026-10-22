@@ -46,12 +46,19 @@ fn filter_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         x += w + 1;
     }
 
-    let follow_label = if app.logs.follow { "following ✓" } else { "follow" };
+    let follow_label = if app.logs.follow {
+        "following ✓"
+    } else {
+        "follow"
+    };
     let mut follow = Button::new(follow_label, Action::ToggleFollow).key("f");
     if app.logs.follow {
         follow = follow.primary();
     }
-    let buttons = [follow, Button::new("Clear", Action::ClearLogs).key("c").danger()];
+    let buttons = [
+        follow,
+        Button::new("Clear", Action::ClearLogs).key("c").danger(),
+    ];
     let x = x + 2;
     if x < area.right() {
         widgets::button_row(
@@ -83,7 +90,12 @@ fn log_list(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(block, area);
 
     if visible.is_empty() {
-        widgets::empty_state(frame, inner, "no log entries", "at or above the selected level");
+        widgets::empty_state(
+            frame,
+            inner,
+            "no log entries",
+            "at or above the selected level",
+        );
         return;
     }
 

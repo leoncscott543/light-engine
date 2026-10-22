@@ -27,7 +27,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             frame,
             inner,
             "no benchmarks registered",
-            "the backend reports none yet — add them in crates/bench",
+            "register workloads in light_bench::Registry",
         );
         return;
     };
@@ -100,14 +100,23 @@ fn bench_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             }
             Some(BenchRecord { stats: Some(s), .. }) => fmt::duration(s.mean),
             Some(r) if r.state == RunState::Cancelled => "cancel".into(),
+            Some(r) if r.state == RunState::Failed => "failed".into(),
             _ => String::new(),
         };
-        let name = desc.id.0.split_once('/').map_or(desc.id.0.as_str(), |(_, n)| n);
+        let name = desc
+            .id
+            .0
+            .split_once('/')
+            .map_or(desc.id.0.as_str(), |(_, n)| n);
         let badge_w = 9usize;
         let name_w = (inner.width as usize).saturating_sub(badge_w + 10);
-        let marker = if app.bench.active.as_ref() == Some(&desc.id) { "▶" } else { " " };
+        let marker = if app.bench.active.as_ref() == Some(&desc.id) {
+            "▶"
+        } else {
+            " "
+        };
         let line = Line::from(vec![
-            Span::styled(format!("{marker}"), style.fg(theme::OK)),
+            Span::styled(marker, style.fg(theme::OK)),
             Span::styled(format!("{:<8} ", desc.group), style.fg(theme::TEXT_DIM)),
             Span::styled(format!("{name:<name_w$.name_w$}"), style),
             Span::styled(format!("{badge:>badge_w$}"), style.fg(theme::GOLD)),
@@ -118,7 +127,9 @@ fn bench_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 }
 
 fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-    let Some(desc) = app.bench.selected() else { return };
+    let Some(desc) = app.bench.selected() else {
+        return;
+    };
     let block = panel(&desc.id.0, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -134,7 +145,11 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     frame.render_widget(
         Paragraph::new(vec![
             Line::styled(desc.description.clone(), theme::base()),
-            widgets::kv("group ", Span::styled(desc.group.clone(), theme::value()), 6),
+            widgets::kv(
+                "group ",
+                Span::styled(desc.group.clone(), theme::value()),
+                6,
+            ),
         ]),
         info,
     );
@@ -142,9 +157,17 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let c = app.bench.config;
     let mut x = config.x;
     for (label, value, action) in [
-        ("samples", c.samples, Action::AdjustSamples as fn(i32) -> Action),
+        (
+            "samples",
+            c.samples,
+            Action::AdjustSamples as fn(i32) -> Action,
+        ),
         ("warmup", c.warmup_iters, Action::AdjustWarmup),
-        ("iters/sample", c.iters_per_sample, Action::AdjustItersPerSample),
+        (
+            "iters/sample",
+            c.iters_per_sample,
+            Action::AdjustItersPerSample,
+        ),
     ] {
         x = stepper(app, frame, Rect { x, ..config }, label, value, action, hits) + 2;
     }
@@ -207,10 +230,16 @@ fn stepper(
             Style::new().bg(theme::SURFACE).fg(theme::GOLD)
         }
     };
-    frame.render_widget(Paragraph::new(Span::styled(label_s, theme::label())), Rect::new(area.x, y, lw, 1));
+    frame.render_widget(
+        Paragraph::new(Span::styled(label_s, theme::label())),
+        Rect::new(area.x, y, lw, 1),
+    );
     frame.render_widget(Paragraph::new(Span::styled(" ◂", arrow(dec))), dec);
     frame.render_widget(
-        Paragraph::new(Span::styled(value_s, Style::new().bg(theme::SURFACE).fg(theme::TEXT))),
+        Paragraph::new(Span::styled(
+            value_s,
+            Style::new().bg(theme::SURFACE).fg(theme::TEXT),
+        )),
         val,
     );
     frame.render_widget(Paragraph::new(Span::styled("▸ ", arrow(inc))), inc);
@@ -227,10 +256,13 @@ fn progress_panel(record: Option<&BenchRecord>, frame: &mut Frame, area: Rect) {
         None => (0.0, "not run yet".to_string()),
         Some(r) => {
             let state = match r.state {
-                RunState::Running if r.samples.is_empty() => "warming up",
-                RunState::Running => "running",
-                RunState::Finished => "finished",
-                RunState::Cancelled => "cancelled",
+                RunState::Running if r.samples.is_empty() => "warming up".to_string(),
+                RunState::Running => "running".into(),
+                RunState::Finished => "finished".into(),
+                RunState::Cancelled => "cancelled".into(),
+                RunState::Failed => {
+                    format!("failed: {}", r.error.as_deref().unwrap_or("unknown error"))
+                }
             };
             (
                 r.progress(),
@@ -318,7 +350,14 @@ fn stats_panel(record: Option<&BenchRecord>, frame: &mut Frame, area: Rect) {
     let lines = vec![
         widgets::kv("n", Span::styled(s.count.to_string(), theme::value()), w),
         widgets::kv("mean", d(s.mean), w),
-        widgets::kv("σ", Span::styled(format!("{} ({cv:.1}%)", fmt::duration(s.stddev)), theme::value()), w),
+        widgets::kv(
+            "σ",
+            Span::styled(
+                format!("{} ({cv:.1}%)", fmt::duration(s.stddev)),
+                theme::value(),
+            ),
+            w,
+        ),
         widgets::kv("min", d(s.min), w),
         widgets::kv("p50", d(s.p50), w),
         widgets::kv("p95", d(s.p95), w),

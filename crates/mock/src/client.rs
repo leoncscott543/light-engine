@@ -1,12 +1,11 @@
 use std::time::{Duration, Instant};
 
 use light_contracts::{
-    BackendEvent, BackendInfo, BackendKind, BenchDescriptor, BenchEvent, BenchId, BenchRunConfig,
-    ClientError, LogEntry, LogLevel, ProcessId, ProcessInfo, ProcessKind, ProcessState,
-    SimClient, SimCommand, SimConfig, SimSnapshot, SimStatus,
+    BackendEvent, BackendInfo, BackendKind, ClientError, LogEntry, LogLevel, ProcessId,
+    ProcessInfo, ProcessKind, ProcessState, SimClient, SimCommand, SimConfig, SimSnapshot,
+    SimStatus,
 };
 
-use crate::bench::{self, BenchRun};
 use crate::model::Session;
 use crate::rng::Rng;
 
@@ -21,31 +20,31 @@ const CHECKPOINT_EVERY: u64 = 5_000;
 /// Synthetic backend. Time advances with wall clock in [`SimClient::poll`],
 /// or explicitly via [`MockClient::advance`] for deterministic use.
 pub struct MockClient {
-    rng: Rng,
+    seed: u64,
     clock: Duration,
     last_poll: Option<Instant>,
     session: Option<Session>,
     step_budget: f64,
     energy_warned: bool,
-    benches: Vec<BenchDescriptor>,
-    bench_run: Option<BenchRun>,
     events: Vec<BackendEvent>,
 }
 
 impl MockClient {
     pub fn new(seed: u64) -> Self {
         let mut client = Self {
-            rng: Rng::new(seed),
+            seed,
             clock: Duration::ZERO,
             last_poll: None,
             session: None,
             step_budget: 0.0,
             energy_warned: false,
-            benches: bench::catalog(),
-            bench_run: None,
             events: Vec::new(),
         };
-        client.log(LogLevel::Info, "mock", "mock backend online; all data is synthetic");
+        client.log(
+            LogLevel::Info,
+            "mock",
+            "mock backend online; all data is synthetic",
+        );
         client
     }
 
@@ -62,7 +61,6 @@ impl MockClient {
     pub fn advance(&mut self, dt: Duration) -> Vec<BackendEvent> {
         self.clock += dt;
         self.advance_session(dt);
-        self.advance_bench(dt);
         std::mem::take(&mut self.events)
     }
 
@@ -108,29 +106,6 @@ impl MockClient {
             );
             self.log(LogLevel::Warn, "sim", msg);
         }
-    }
-
-    fn advance_bench(&mut self, dt: Duration) {
-        let Some(run) = self.bench_run.as_mut() else {
-            return;
-        };
-        let (events, done) = run.advance(dt, &mut self.rng);
-        if done {
-            let id = run.id.clone();
-            self.bench_run = None;
-            if let Some(BenchEvent::Finished {
-                stats: Some(stats), ..
-            }) = events.last()
-            {
-                let msg = format!(
-                    "{id} finished: mean {:?} p99 {:?} ({} samples)",
-                    stats.mean, stats.p99, stats.count
-                );
-                self.log(LogLevel::Info, "bench", msg);
-            }
-        }
-        self.events
-            .extend(events.into_iter().map(BackendEvent::Bench));
     }
 
     fn log(&mut self, level: LogLevel, source: &str, message: impl Into<String>) {
@@ -209,9 +184,7 @@ impl SimClient for MockClient {
             SimCommand::Step(n) => {
                 let s = self.session_mut()?;
                 if s.status == SimStatus::Running {
-                    return Err(ClientError::InvalidCommand(
-                        "pause before stepping".into(),
-                    ));
+                    return Err(ClientError::InvalidCommand("pause before stepping".into()));
                 }
                 s.advance(u64::from(n));
                 if s.status == SimStatus::Idle {
@@ -243,39 +216,8 @@ impl SimClient for MockClient {
         Ok(())
     }
 
-    fn benches(&self) -> Vec<BenchDescriptor> {
-        self.benches.clone()
-    }
-
-    fn run_bench(&mut self, id: &BenchId, config: BenchRunConfig) -> Result<(), ClientError> {
-        if let Some(active) = &self.bench_run {
-            return Err(ClientError::BenchBusy(active.id.clone()));
-        }
-        if config.samples == 0 {
-            return Err(ClientError::InvalidCommand("samples must be > 0".into()));
-        }
-        let (run, started) =
-            BenchRun::start(id, config).ok_or_else(|| ClientError::UnknownBench(id.clone()))?;
-        self.bench_run = Some(run);
-        self.events.push(BackendEvent::Bench(started));
-        self.log(LogLevel::Info, "bench", format!("{id} started"));
-        Ok(())
-    }
-
-    fn cancel_bench(&mut self) -> Result<(), ClientError> {
-        let run = self.bench_run.take().ok_or(ClientError::NoActiveBench)?;
-        self.log(LogLevel::Warn, "bench", format!("{} cancelled", run.id));
-        self.events
-            .push(BackendEvent::Bench(BenchEvent::Cancelled { id: run.id }));
-        Ok(())
-    }
-
-    fn active_bench(&self) -> Option<BenchId> {
-        self.bench_run.as_ref().map(|r| r.id.clone())
-    }
-
     fn processes(&self) -> Vec<ProcessInfo> {
-        let mut rng = Rng::new(self.clock.as_millis() as u64);
+        let mut rng = Rng::new(self.seed ^ self.clock.as_millis() as u64);
         let uptime = self.clock;
         let sim_state = match self.session.as_ref().map(|s| &s.status) {
             None => ProcessState::Stopped,
@@ -316,20 +258,6 @@ impl SimClient for MockClient {
                 uptime,
             });
         }
-        let bench_active = self.bench_run.is_some();
-        out.push(ProcessInfo {
-            id: ProcessId(30),
-            name: "bench-runner".into(),
-            kind: ProcessKind::Bench,
-            state: if bench_active {
-                ProcessState::Running
-            } else {
-                ProcessState::Idle
-            },
-            cpu: busy(bench_active, 1.0),
-            memory_bytes: if bench_active { 96 << 20 } else { 2 << 20 },
-            uptime,
-        });
         out.push(ProcessInfo {
             id: ProcessId(40),
             name: "sensor-0".into(),
@@ -364,10 +292,14 @@ impl SimClient for MockClient {
 
 fn validate(config: &SimConfig) -> Result<(), ClientError> {
     if config.particle_count == 0 {
-        return Err(ClientError::InvalidCommand("particle_count must be > 0".into()));
+        return Err(ClientError::InvalidCommand(
+            "particle_count must be > 0".into(),
+        ));
     }
     if !(config.dt.is_finite() && config.dt > 0.0) {
-        return Err(ClientError::InvalidCommand("dt must be positive and finite".into()));
+        return Err(ClientError::InvalidCommand(
+            "dt must be positive and finite".into(),
+        ));
     }
     Ok(())
 }
@@ -381,7 +313,11 @@ mod tests {
         let mut c = MockClient::new(1);
         assert!(c.snapshot().is_none());
         assert_eq!(c.command(SimCommand::Start), Err(ClientError::NoSession));
-        assert!(c.advance(Duration::from_secs(1)).iter().all(|e| matches!(e, BackendEvent::Log(_))));
+        assert!(
+            c.advance(Duration::from_secs(1))
+                .iter()
+                .all(|e| matches!(e, BackendEvent::Log(_)))
+        );
     }
 
     #[test]
@@ -415,26 +351,6 @@ mod tests {
         assert!(c.command(SimCommand::SetTimestep(f64::NAN)).is_err());
         c.command(SimCommand::SetTimestep(5e-4)).unwrap();
         assert_eq!(c.snapshot().unwrap().config.dt, 5e-4);
-    }
-
-    #[test]
-    fn bench_runs_to_completion_and_is_exclusive() {
-        let mut c = MockClient::new(1);
-        let id = c.benches()[0].id.clone();
-        let config = BenchRunConfig {
-            warmup_iters: 1,
-            samples: 10,
-            iters_per_sample: 1,
-        };
-        c.run_bench(&id, config).unwrap();
-        assert_eq!(c.run_bench(&id, config), Err(ClientError::BenchBusy(id.clone())));
-        let events = c.advance(Duration::from_secs(5));
-        assert!(events.iter().any(|e| matches!(
-            e,
-            BackendEvent::Bench(BenchEvent::Finished { .. })
-        )));
-        assert!(c.active_bench().is_none());
-        assert_eq!(c.cancel_bench(), Err(ClientError::NoActiveBench));
     }
 
     #[test]

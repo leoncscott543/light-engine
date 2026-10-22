@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/tui", "crates/bench"]
+members = ["apps/*", "crates/*"]
 resolver = "3"
 
 [workspace.package]

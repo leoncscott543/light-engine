@@ -27,8 +27,40 @@ cargo test --workspace --locked
 ## Current Status
 
 This is a scaffold, not a validated simulation kernel. The kernel library is a
-placeholder and the executable prints an introduction and waits for input.
+placeholder. The `light` terminal dashboard provides Overview, Simulation,
+Benchmarks, Processes, and Logs tabs backed by explicitly synthetic mock data.
 Passing build checks does not establish numerical accuracy or SIMD performance.
+
+The workspace separates shared interfaces (`light_contracts`), mock simulation
+and workloads (`light_mock`), benchmark execution (`light_bench`), and the
+dashboard (`light_tui`). Simulation and benchmarking have independent client
+interfaces. Benchmarks run on a dedicated worker with cancellation and reported
+workload failures; the built-in kernel benchmark registry is still empty.
+
+## Run the Dashboard
+
+Run in an interactive terminal:
+
+```sh
+cargo run --locked -p light_tui --bin light -- --session
+cargo run --locked -p light_tui --bin light -- --seed 0x1234 --benches mock
+cargo run --locked -p light_tui --bin light -- --benches builtin
+```
+
+`--session` creates an idle mock session at startup. Without it, create a session
+from the dashboard. `--seed` selects seeded mock data; `--benches builtin` shows
+the currently empty kernel workload list instead of synthetic workloads.
+Use `--help` to inspect options without entering terminal mode.
+
+- `1`-`5` or Tab: switch tabs; `?`: show help; `q` or Ctrl+C: quit.
+- Space: run/pause; `n`: create a session; `.`: step once.
+- Simulation: arrow keys select/adjust configuration; `R`: recreate; `D`: destroy.
+- Benchmarks: Enter: run; `x`: cancel; arrows: sample count; `[`/`]`: warmup;
+  `{`/`}`: iterations per sample.
+- Logs: `f`: follow; `v`: minimum level; `c`: clear.
+
+Tabs and displayed controls also support mouse clicks. Reported simulation
+invariants and performance are synthetic, not measurements of a physics kernel.
 
 ## Development
 

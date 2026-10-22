@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use light_contracts::{Integrator, Invariants, Layout, SimConfig, SimSnapshot, SimStatus, StepPerf};
+use light_contracts::{
+    Integrator, Invariants, Layout, SimConfig, SimSnapshot, SimStatus, StepPerf,
+};
 
 use crate::rng::Rng;
 
@@ -203,6 +205,9 @@ mod tests {
             layout: Layout::AoSoA { lanes: 8 },
             ..SimConfig::default()
         });
-        assert_eq!(s.snapshot().perf.memory_bytes, 16 * COEFFS_PER_PARTICLE * BYTES_PER_COEFF);
+        assert_eq!(
+            s.snapshot().perf.memory_bytes,
+            16 * COEFFS_PER_PARTICLE * BYTES_PER_COEFF
+        );
     }
 }

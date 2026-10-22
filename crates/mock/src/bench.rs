@@ -1,14 +1,22 @@
-//! Synthetic benchmark catalog and timed sample generation.
+//! Synthetic benchmark workloads for the bench runtime.
+//!
+//! Each mock bench really occupies the bench worker for a synthetic duration
+//! (lognormal noise plus occasional outliers), so the runtime measures it like
+//! any real workload.
 
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use light_contracts::{BenchDescriptor, BenchEvent, BenchId, BenchRunConfig, BenchStats};
+use light_bench::{Bench, Registry};
+use light_contracts::{BenchDescriptor, BenchId};
 
 use crate::rng::Rng;
 
-/// Wall-clock pacing so front ends can watch runs progress.
-const WARMUP_ITERS_PER_SEC: f64 = 400.0;
-const SAMPLES_PER_SEC: f64 = 45.0;
+/// Below this remaining wait, spin instead of sleeping for accuracy.
+const SPIN_THRESHOLD: Duration = Duration::from_micros(1_500);
+const OUTLIER_CHANCE: f64 = 0.02;
 
 struct Spec {
     id: &'static str,
@@ -16,7 +24,7 @@ struct Spec {
     description: &'static str,
     /// Typical per-iteration cost in nanoseconds.
     base_ns: f64,
-    /// Relative standard deviation.
+    /// Relative standard deviation of a single iteration.
     spread: f64,
 }
 
@@ -72,121 +80,108 @@ const CATALOG: &[Spec] = &[
     },
 ];
 
-pub fn catalog() -> Vec<BenchDescriptor> {
-    CATALOG
-        .iter()
-        .map(|s| BenchDescriptor {
-            id: BenchId::from(s.id),
-            group: s.group.into(),
-            description: s.description.into(),
-        })
-        .collect()
+pub struct MockBench {
+    spec: &'static Spec,
+    rng: Rng,
 }
 
-pub struct BenchRun {
-    pub id: BenchId,
-    config: BenchRunConfig,
-    base_ns: f64,
-    spread: f64,
-    warmup_left: f64,
-    sample_budget: f64,
-    samples: Vec<Duration>,
-}
-
-impl BenchRun {
-    pub fn start(id: &BenchId, config: BenchRunConfig) -> Option<(Self, BenchEvent)> {
-        let spec = CATALOG.iter().find(|s| s.id == id.0)?;
-        let run = Self {
-            id: id.clone(),
-            config,
-            base_ns: spec.base_ns,
-            spread: spec.spread,
-            warmup_left: f64::from(config.warmup_iters),
-            sample_budget: 0.0,
-            samples: Vec::with_capacity(config.samples as usize),
-        };
-        let started = BenchEvent::Started {
-            id: id.clone(),
-            config,
-        };
-        Some((run, started))
+impl Bench for MockBench {
+    fn descriptor(&self) -> BenchDescriptor {
+        BenchDescriptor {
+            id: BenchId::from(self.spec.id),
+            group: self.spec.group.into(),
+            description: self.spec.description.into(),
+        }
     }
 
-    /// Advances wall time; returns emitted events and whether the run finished.
-    pub fn advance(&mut self, dt: Duration, rng: &mut Rng) -> (Vec<BenchEvent>, bool) {
-        let mut events = Vec::new();
-        let mut secs = dt.as_secs_f64();
+    fn iter(&mut self) {
+        let mut ns = self.spec.base_ns * (self.rng.normal() * self.spec.spread).exp();
+        if self.rng.chance(OUTLIER_CHANCE) {
+            ns *= self.rng.range(1.4, 2.2);
+        }
+        occupy(Duration::from_nanos(ns.max(1.0) as u64));
+    }
+}
 
-        if self.warmup_left > 0.0 {
-            let needed = self.warmup_left / WARMUP_ITERS_PER_SEC;
-            if secs < needed {
-                self.warmup_left -= secs * WARMUP_ITERS_PER_SEC;
-                return (events, false);
+/// Holds the current thread for `cost`: sleeps for the bulk, spins the tail.
+fn occupy(cost: Duration) {
+    let deadline = Instant::now() + cost;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return;
+        }
+        if remaining > SPIN_THRESHOLD {
+            thread::sleep(remaining - SPIN_THRESHOLD);
+        } else {
+            std::hint::spin_loop();
+        }
+    }
+}
+
+/// Registry of every mock workload. Each run gets a distinct noise stream
+/// derived from `seed`.
+pub fn registry(seed: u64) -> Registry {
+    let runs = Arc::new(AtomicU64::new(0));
+    let mut registry = Registry::new();
+    for (index, spec) in CATALOG.iter().enumerate() {
+        let runs = Arc::clone(&runs);
+        registry.register(move || {
+            let run = runs.fetch_add(1, Ordering::Relaxed);
+            MockBench {
+                spec,
+                rng: Rng::new(seed ^ ((index as u64) << 32) ^ run),
             }
-            self.warmup_left = 0.0;
-            secs -= needed;
-        }
-
-        self.sample_budget += secs * SAMPLES_PER_SEC;
-        while self.sample_budget >= 1.0 && (self.samples.len() as u32) < self.config.samples {
-            self.sample_budget -= 1.0;
-            let elapsed = self.sample(rng);
-            events.push(BenchEvent::Sample {
-                id: self.id.clone(),
-                index: self.samples.len() as u32,
-                elapsed,
-            });
-            self.samples.push(elapsed);
-        }
-
-        let done = self.samples.len() as u32 >= self.config.samples;
-        if done {
-            events.push(BenchEvent::Finished {
-                id: self.id.clone(),
-                stats: BenchStats::from_samples(&self.samples),
-            });
-        }
-        (events, done)
+        });
     }
-
-    fn sample(&self, rng: &mut Rng) -> Duration {
-        let per_sample = f64::from(self.config.iters_per_sample.max(1));
-        // Averaging over more iterations narrows the spread.
-        let sigma = self.spread / per_sample.sqrt();
-        let mut ns = self.base_ns * (rng.normal() * sigma).exp();
-        if rng.chance(0.02) {
-            ns *= rng.range(1.4, 2.2);
-        }
-        Duration::from_nanos(ns.max(1.0) as u64)
-    }
+    registry
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use light_bench::BenchRuntime;
+    use light_contracts::{BenchClient, BenchEvent, BenchRunConfig};
+
     use super::*;
 
     #[test]
-    fn run_produces_requested_samples() {
-        let id = BenchId::from("layout/integrate_soa");
-        let config = BenchRunConfig {
-            warmup_iters: 4,
-            samples: 20,
-            iters_per_sample: 1,
-        };
-        let (mut run, _) = BenchRun::start(&id, config).unwrap();
-        let mut rng = Rng::new(1);
-        let (events, done) = run.advance(Duration::from_secs(10), &mut rng);
-        assert!(done);
-        let samples = events
-            .iter()
-            .filter(|e| matches!(e, BenchEvent::Sample { .. }))
-            .count();
-        assert_eq!(samples, 20);
-        assert!(matches!(events.last(), Some(BenchEvent::Finished { stats: Some(_), .. })));
+    fn registers_whole_catalog() {
+        let r = registry(1);
+        assert_eq!(r.len(), CATALOG.len());
+        assert!(r.instantiate(&"layout/integrate_soa".into()).is_some());
     }
 
     #[test]
-    fn unknown_bench_is_rejected() {
-        assert!(BenchRun::start(&BenchId::from("nope"), BenchRunConfig::default()).is_none());
+    fn occupies_roughly_the_requested_time() {
+        let start = Instant::now();
+        occupy(Duration::from_millis(3));
+        let took = start.elapsed();
+        assert!(took >= Duration::from_millis(3), "{took:?}");
+    }
+
+    #[test]
+    fn runs_on_the_bench_runtime() {
+        let mut rt = BenchRuntime::new(registry(7));
+        let config = BenchRunConfig {
+            warmup_iters: 1,
+            samples: 8,
+            iters_per_sample: 1,
+        };
+        rt.run(&"layout/integrate_aosoa8".into(), config).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut events = Vec::new();
+        while rt.active().is_some() && Instant::now() < deadline {
+            events.extend(rt.poll());
+            thread::sleep(Duration::from_millis(1));
+        }
+        match events.last() {
+            Some(BenchEvent::Finished { stats: Some(s), .. }) => {
+                assert_eq!(s.count, 8);
+                assert!(s.min >= Duration::from_micros(100), "{s:?}");
+            }
+            other => panic!("unexpected final event: {other:?}"),
+        }
     }
 }

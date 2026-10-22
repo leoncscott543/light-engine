@@ -10,6 +10,7 @@ name = "light"
 path = "src/main.rs"
 
 [dependencies]
+light_bench.workspace = true
 light_contracts.workspace = true
 light_mock.workspace = true
 ratatui.workspace = true

@@ -580,6 +580,7 @@ version = "0.1.0"
 name = "light_mock"
 version = "0.1.0"
 dependencies = [
+ "light_bench",
  "light_contracts",
 ]
 
@@ -587,6 +588,7 @@ dependencies = [
 name = "light_tui"
 version = "0.1.0"
 dependencies = [
+ "light_bench",
  "light_contracts",
  "light_mock",
  "ratatui",

@@ -15,8 +15,11 @@ pub fn energy(app: &App, frame: &mut Frame, area: Rect, focused: bool) {
     let points: Vec<(f64, f64)> = app.sim.energy.iter().collect();
     let latest = points.last().map_or(0.0, |p| p.1);
     let block = panel("Energy drift |H-H₀|/|H₀|", focused).title(
-        Line::from(Span::styled(format!(" {} ", fmt::sci(latest)), theme::energy_error(latest)))
-            .right_aligned(),
+        Line::from(Span::styled(
+            format!(" {} ", fmt::sci(latest)),
+            theme::energy_error(latest),
+        ))
+        .right_aligned(),
     );
 
     if points.len() < 2 {
@@ -31,7 +34,10 @@ pub fn energy(app: &App, frame: &mut Frame, area: Rect, focused: bool) {
         return;
     }
 
-    let (x0, x1) = (points[0].0, points[points.len() - 1].0.max(points[0].0 + 1.0));
+    let (x0, x1) = (
+        points[0].0,
+        points[points.len() - 1].0.max(points[0].0 + 1.0),
+    );
     let y_max = points.iter().map(|p| p.1).fold(0.0, f64::max).max(1e-16) * 1.15;
     let axis_style = Style::new().fg(theme::TEXT_DIM);
     let chart = Chart::new(vec![

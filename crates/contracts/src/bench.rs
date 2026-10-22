@@ -108,6 +108,11 @@ pub enum BenchEvent {
     Cancelled {
         id: BenchId,
     },
+    /// The workload panicked or the runtime could not execute it.
+    Failed {
+        id: BenchId,
+        reason: String,
+    },
 }
 
 impl BenchEvent {
@@ -116,8 +121,52 @@ impl BenchEvent {
             Self::Started { id, .. }
             | Self::Sample { id, .. }
             | Self::Finished { id, .. }
-            | Self::Cancelled { id } => id,
+            | Self::Cancelled { id }
+            | Self::Failed { id, .. } => id,
         }
+    }
+
+    /// Whether this event ends a run.
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::Finished { .. } | Self::Cancelled { .. } | Self::Failed { .. }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BenchError {
+    Unknown(BenchId),
+    /// Only one benchmark may run at a time.
+    Busy(BenchId),
+    /// No benchmark is running.
+    NotRunning,
+    InvalidConfig(String),
+    /// The runtime is unavailable (e.g. its worker has shut down).
+    Runtime(String),
+}
+
+impl fmt::Display for BenchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unknown(id) => write!(f, "unknown benchmark `{id}`"),
+            Self::Busy(id) => write!(f, "benchmark `{id}` is already running"),
+            Self::NotRunning => f.write_str("no benchmark is running"),
+            Self::InvalidConfig(why) => write!(f, "invalid benchmark config: {why}"),
+            Self::Runtime(why) => write!(f, "bench runtime error: {why}"),
+        }
+    }
+}
+
+impl std::error::Error for BenchError {}
+
+impl BenchRunConfig {
+    pub fn validate(&self) -> Result<(), BenchError> {
+        if self.samples == 0 {
+            return Err(BenchError::InvalidConfig("samples must be > 0".into()));
+        }
+        Ok(())
     }
 }
 

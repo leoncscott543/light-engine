@@ -23,8 +23,7 @@ const COLUMNS: [(&str, usize); 7] = [
 ];
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-    let [table, detail] =
-        Layout::vertical([Constraint::Min(5), Constraint::Length(8)]).areas(area);
+    let [table, detail] = Layout::vertical([Constraint::Min(5), Constraint::Length(8)]).areas(area);
     process_table(app, frame, table, hits);
 
     let Some(p) = app.procs.list.get(app.procs.selected) else {
@@ -41,7 +40,15 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         .map(|s| s.iter().map(|c| c * 100.0).collect())
         .unwrap_or_default();
     let title = format!("{} · CPU history", p.name);
-    charts::sparkline(frame, detail, &title, &history, theme::HONEY, |v| format!("{v:.0}%"), false);
+    charts::sparkline(
+        frame,
+        detail,
+        &title,
+        &history,
+        theme::HONEY,
+        |v| format!("{v:.0}%"),
+        false,
+    );
 }
 
 fn row_text(cells: [String; 7]) -> String {
@@ -87,7 +94,11 @@ fn process_table(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         } else {
             theme::base()
         };
-        let cpu = format!("{} {:>4.0}%", widgets::bar(p.cpu.min(1.0), 10), p.cpu * 100.0);
+        let cpu = format!(
+            "{} {:>4.0}%",
+            widgets::bar(p.cpu.min(1.0), 10),
+            p.cpu * 100.0
+        );
         let pre = row_text([
             p.id.to_string(),
             p.name.clone(),

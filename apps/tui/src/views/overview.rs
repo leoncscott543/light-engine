@@ -9,7 +9,7 @@ use crate::app::{App, RunState, Tab};
 use crate::fmt;
 use crate::hit::HitMap;
 use crate::theme;
-use crate::widgets::{self, Button, panel};
+use crate::widgets::{self, Button, StatCard, panel};
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let [cards, charts_row, bottom] = Layout::vertical([
@@ -38,8 +38,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     );
 
     let [bench, system] =
-        Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .areas(bottom);
+        Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(bottom);
     bench_summary(app, frame, bench, hits);
     system_panel(app, frame, system);
 }
@@ -49,73 +48,65 @@ fn stat_cards(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let snap = app.sim.snapshot.as_ref();
     let status = app.sim.status();
     let none = || Line::styled("—", theme::faint());
-    let go_sim = Action::GoTo(Tab::Simulation);
+    let action = Action::GoTo(Tab::Simulation);
 
-    widgets::stat_card(
-        frame,
-        cols[0],
-        "Session",
-        Line::styled(status.to_string(), theme::sim_status(&status)),
-        snap.map_or_else(
-            || Line::styled("press n or space to create", theme::dim()),
-            |s| {
+    let cards = [
+        StatCard {
+            title: "Session",
+            value: Line::styled(status.to_string(), theme::sim_status(&status)),
+            detail: snap.map_or_else(
+                || Line::styled("press n or space to create", theme::dim()),
+                |s| {
+                    Line::styled(
+                        format!("{} · {}", s.config.integrator, s.config.layout),
+                        theme::dim(),
+                    )
+                },
+            ),
+            action,
+        },
+        StatCard {
+            title: "Tick",
+            value: snap.map_or_else(none, |s| Line::styled(fmt::count(s.tick), theme::value())),
+            detail: snap.map_or_else(none, |s| {
+                Line::styled(format!("t = {:.4}", s.sim_time), theme::dim())
+            }),
+            action,
+        },
+        StatCard {
+            title: "Throughput",
+            value: snap.map_or_else(none, |s| {
+                Line::styled(fmt::rate(s.perf.particles_per_sec), theme::value())
+            }),
+            detail: snap.map_or_else(none, |s| {
                 Line::styled(
-                    format!("{} · {}", s.config.integrator, s.config.layout),
+                    format!(
+                        "{} particles",
+                        fmt::count(u64::from(s.config.particle_count))
+                    ),
                     theme::dim(),
                 )
-            },
-        ),
-        go_sim,
-        app.mouse,
-        hits,
-    );
-    widgets::stat_card(
-        frame,
-        cols[1],
-        "Tick",
-        snap.map_or_else(none, |s| Line::styled(fmt::count(s.tick), theme::value())),
-        snap.map_or_else(none, |s| {
-            Line::styled(format!("t = {:.4}", s.sim_time), theme::dim())
-        }),
-        go_sim,
-        app.mouse,
-        hits,
-    );
-    widgets::stat_card(
-        frame,
-        cols[2],
-        "Throughput",
-        snap.map_or_else(none, |s| {
-            Line::styled(fmt::rate(s.perf.particles_per_sec), theme::value())
-        }),
-        snap.map_or_else(none, |s| {
-            Line::styled(
-                format!("{} particles", fmt::count(u64::from(s.config.particle_count))),
-                theme::dim(),
-            )
-        }),
-        go_sim,
-        app.mouse,
-        hits,
-    );
-    widgets::stat_card(
-        frame,
-        cols[3],
-        "Energy error",
-        snap.map_or_else(none, |s| {
-            let e = s.invariants.relative_energy_error();
-            Line::styled(fmt::sci(e), theme::energy_error(e))
-        }),
-        snap.map_or_else(none, |s| {
-            Line::styled(
-                format!("|p| {}", fmt::sci(s.invariants.momentum_magnitude())),
-                theme::dim(),
-            )
-        }),
-        go_sim,
-        app.mouse,
-        hits,
-    );
+            }),
+            action,
+        },
+        StatCard {
+            title: "Energy error",
+            value: snap.map_or_else(none, |s| {
+                let e = s.invariants.relative_energy_error();
+                Line::styled(fmt::sci(e), theme::energy_error(e))
+            }),
+            detail: snap.map_or_else(none, |s| {
+                Line::styled(
+                    format!("|p| {}", fmt::sci(s.invariants.momentum_magnitude())),
+                    theme::dim(),
+                )
+            }),
+            action,
+        },
+    ];
+    for (card, col) in cards.into_iter().zip(cols) {
+        card.render(frame, col, app.mouse, hits);
+    }
 }
 
 fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
@@ -142,13 +133,21 @@ fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         12,
     )];
     if let Some(id) = shown {
-        lines.push(widgets::kv("benchmark", Span::styled(id.to_string(), theme::value()), 12));
+        lines.push(widgets::kv(
+            "benchmark",
+            Span::styled(id.to_string(), theme::value()),
+            12,
+        ));
     }
     if let Some(stats) = record.and_then(|r| r.stats) {
         lines.push(widgets::kv(
             "mean / p99",
             Span::styled(
-                format!("{} / {}", fmt::duration(stats.mean), fmt::duration(stats.p99)),
+                format!(
+                    "{} / {}",
+                    fmt::duration(stats.mean),
+                    fmt::duration(stats.p99)
+                ),
                 theme::value(),
             ),
             12,
@@ -161,10 +160,15 @@ fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             RunState::Running => format!("{}/{} samples", r.samples.len(), r.config.samples),
             RunState::Finished => "finished".into(),
             RunState::Cancelled => "cancelled".into(),
+            RunState::Failed => "failed".into(),
         };
         frame.render_widget(
             Gauge::default()
-                .gauge_style(ratatui::style::Style::new().fg(theme::ACCENT).bg(theme::SURFACE))
+                .gauge_style(
+                    ratatui::style::Style::new()
+                        .fg(theme::ACCENT)
+                        .bg(theme::SURFACE),
+                )
                 .ratio(r.progress())
                 .label(Span::styled(label, theme::value())),
             gauge,
@@ -195,19 +199,30 @@ fn system_panel(app: &App, frame: &mut Frame, area: Rect) {
     let block = panel("Dashboard", false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let [text, spark] =
-        Layout::vertical([Constraint::Length(4), Constraint::Min(1)]).areas(inner);
+    let [text, spark] = Layout::vertical([Constraint::Length(5), Constraint::Min(1)]).areas(inner);
 
     let render_ms = app.ui.render_ms.latest().unwrap_or(0.0);
+    let backend = |info: &light_contracts::BackendInfo| {
+        Span::styled(format!("{} ({})", info.name, info.kind), theme::value())
+    };
     let lines = vec![
+        widgets::kv("sim", backend(&app.backend), 10),
+        widgets::kv("bench", backend(&app.bench_backend), 10),
         widgets::kv(
-            "backend",
-            Span::styled(format!("{} ({})", app.backend.name, app.backend.kind), theme::value()),
+            "uptime",
+            Span::styled(fmt::uptime(app.uptime()), theme::value()),
             10,
         ),
-        widgets::kv("uptime", Span::styled(fmt::uptime(app.uptime()), theme::value()), 10),
-        widgets::kv("fps", Span::styled(format!("{:.0}", app.ui.fps()), theme::value()), 10),
-        widgets::kv("render", Span::styled(format!("{render_ms:.2} ms"), theme::value()), 10),
+        widgets::kv(
+            "fps",
+            Span::styled(format!("{:.0}", app.ui.fps()), theme::value()),
+            10,
+        ),
+        widgets::kv(
+            "render",
+            Span::styled(format!("{render_ms:.2} ms"), theme::value()),
+            10,
+        ),
     ];
     frame.render_widget(Paragraph::new(lines), text);
 
@@ -219,7 +234,11 @@ fn system_panel(app: &App, frame: &mut Frame, area: Rect) {
         ratatui::widgets::Sparkline::default()
             .style(ratatui::style::Style::new().fg(theme::BORDER_FOCUS))
             .max(1000)
-            .data(tail.iter().map(|v| (v / max * 1000.0) as u64).collect::<Vec<_>>()),
+            .data(
+                tail.iter()
+                    .map(|v| (v / max * 1000.0) as u64)
+                    .collect::<Vec<_>>(),
+            ),
         spark,
     );
 }

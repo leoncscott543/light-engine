@@ -46,7 +46,6 @@ pub fn render(app: &App, frame: &mut Frame, hits: &mut HitMap) {
 mod tests {
     use std::time::Duration;
 
-    use light_mock::MockClient;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -63,7 +62,7 @@ mod tests {
     /// Every tab must render at common and tiny sizes, with and without a session.
     #[test]
     fn all_tabs_render_in_all_states() {
-        let mut app = App::new(Box::new(MockClient::new(3)));
+        let mut app = crate::app::testing::mock_app(3);
         for with_session in [false, true] {
             if with_session {
                 app.update(Action::ToggleRun);
@@ -87,7 +86,7 @@ mod tests {
 
     #[test]
     fn tabs_are_clickable() {
-        let app = App::new(Box::new(MockClient::new(3)));
+        let app = crate::app::testing::mock_app(3);
         let hits = draw(&app, 160, 48);
         let mut found = 0;
         for x in 0..160 {
@@ -96,5 +95,18 @@ mod tests {
             }
         }
         assert!(found > 0, "header registers tab hit regions");
+    }
+
+    #[test]
+    fn renders_with_an_empty_bench_runtime() {
+        let mut app = App::new(
+            Box::new(light_mock::MockClient::new(3)),
+            Box::new(light_bench::BenchRuntime::builtin()),
+        );
+        for tab in Tab::ALL {
+            app.update(Action::GoTo(tab));
+            app.update(Action::RunBench);
+            draw(&app, 120, 40);
+        }
     }
 }

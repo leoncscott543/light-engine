@@ -52,7 +52,10 @@ pub fn border(focused: bool) -> Style {
 }
 
 pub fn selected() -> Style {
-    Style::new().bg(SELECT).fg(TEXT).add_modifier(Modifier::BOLD)
+    Style::new()
+        .bg(SELECT)
+        .fg(TEXT)
+        .add_modifier(Modifier::BOLD)
 }
 
 pub fn key_hint() -> Style {

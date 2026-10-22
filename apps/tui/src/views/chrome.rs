@@ -20,7 +20,10 @@ pub fn header(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let brand_w = brand.chars().count() as u16;
     frame.render_widget(
         Paragraph::new(Span::styled(brand, theme::key_hint())),
-        Rect { width: brand_w.min(area.width), ..area },
+        Rect {
+            width: brand_w.min(area.width),
+            ..area
+        },
     );
 
     let mut x = area.x + brand_w + 1;
@@ -32,7 +35,10 @@ pub fn header(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         }
         let rect = Rect::new(x, area.y, w, 1);
         let style = if *tab == app.tab {
-            Style::new().bg(theme::ACCENT).fg(theme::TEXT).add_modifier(Modifier::BOLD)
+            Style::new()
+                .bg(theme::ACCENT)
+                .fg(theme::TEXT)
+                .add_modifier(Modifier::BOLD)
         } else if hovered(app.mouse, rect) {
             Style::new().bg(theme::HOVER).fg(theme::TEXT)
         } else {

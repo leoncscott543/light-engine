@@ -98,7 +98,6 @@ fn map_mouse(hits: &HitMap, mouse: MouseEvent) -> Option<Action> {
 
 #[cfg(test)]
 mod tests {
-    use light_mock::MockClient;
     use ratatui::crossterm::event::KeyEventState;
     use ratatui::layout::Rect;
 
@@ -115,24 +114,36 @@ mod tests {
 
     #[test]
     fn keys_are_contextual() {
-        let mut app = App::new(Box::new(MockClient::new(1)));
+        let mut app = crate::app::testing::mock_app(1);
         let hits = HitMap::default();
-        assert_eq!(map(&app, &hits, key(KeyCode::Char('q'))), Some(Action::Quit));
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('q'))),
+            Some(Action::Quit)
+        );
         assert_eq!(
             map(&app, &hits, key(KeyCode::Char('3'))),
             Some(Action::GoTo(Tab::Benchmarks))
         );
         app.update(Action::GoTo(Tab::Benchmarks));
-        assert_eq!(map(&app, &hits, key(KeyCode::Char('r'))), Some(Action::RunBench));
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('r'))),
+            Some(Action::RunBench)
+        );
         app.update(Action::GoTo(Tab::Simulation));
-        assert_eq!(map(&app, &hits, key(KeyCode::Char('r'))), Some(Action::ResetSession));
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('r'))),
+            Some(Action::ResetSession)
+        );
         app.update(Action::ToggleHelp);
-        assert_eq!(map(&app, &hits, key(KeyCode::Char('r'))), Some(Action::CloseOverlay));
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('r'))),
+            Some(Action::CloseOverlay)
+        );
     }
 
     #[test]
     fn clicks_resolve_through_hit_map() {
-        let app = App::new(Box::new(MockClient::new(1)));
+        let app = crate::app::testing::mock_app(1);
         let mut hits = HitMap::default();
         hits.push(Rect::new(5, 5, 3, 1), Action::RunBench);
         let click = |x, y| {

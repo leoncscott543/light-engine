@@ -48,7 +48,15 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         false,
     );
     let throughput: Vec<f64> = app.sim.throughput.iter().collect();
-    charts::sparkline(frame, thru, "Throughput", &throughput, theme::GOLD, fmt::rate, false);
+    charts::sparkline(
+        frame,
+        thru,
+        "Throughput",
+        &throughput,
+        theme::GOLD,
+        fmt::rate,
+        false,
+    );
 }
 
 fn session_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
@@ -65,7 +73,7 @@ fn session_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let state = app.sim.status();
     let detail = match &app.sim.snapshot {
         Some(s) => format!("  tick {} · t={:.4}", fmt::count(s.tick), s.sim_time),
-        None => "  no session — edit config, then create".into(),
+        None => "  no session".into(),
     };
     frame.render_widget(
         Paragraph::new(Line::from(vec![
@@ -80,12 +88,18 @@ fn session_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let running = state == SimStatus::Running;
     let pending = !app.sim.pending_fields().is_empty();
     let run_button = if running {
-        Button::new("⏸ Pause", Action::ToggleRun).key("space").primary()
+        Button::new("⏸ Pause", Action::ToggleRun)
+            .key("space")
+            .primary()
     } else {
-        Button::new("▶ Start", Action::ToggleRun).key("space").primary()
+        Button::new("▶ Start", Action::ToggleRun)
+            .key("space")
+            .primary()
     };
     let lifecycle = if has {
-        Button::new("Destroy", Action::DestroySession).key("D").danger()
+        Button::new("Destroy", Action::DestroySession)
+            .key("D")
+            .danger()
     } else {
         Button::new("Create", Action::CreateSession).key("n")
     };
@@ -94,10 +108,16 @@ fn session_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         buttons,
         &[
             run_button,
-            Button::new("Step", Action::Step(1)).key(".").enabled(has && !running),
-            Button::new("+100", Action::Step(100)).key(">").enabled(has && !running),
+            Button::new("Step", Action::Step(1))
+                .key(".")
+                .enabled(has && !running),
+            Button::new("+100", Action::Step(100))
+                .key(">")
+                .enabled(has && !running),
             lifecycle,
-            Button::new("Reset", Action::ResetSession).key("r").enabled(has),
+            Button::new("Reset", Action::ResetSession)
+                .key("r")
+                .enabled(has),
             Button::new("Recreate", Action::RecreateSession)
                 .key("R")
                 .enabled(has && pending),
@@ -108,7 +128,11 @@ fn session_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 }
 
 fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-    let title = if app.has_session() { "Config" } else { "Config (draft)" };
+    let title = if app.has_session() {
+        "Config"
+    } else {
+        "Config (draft)"
+    };
     let block = panel(title, true);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -132,7 +156,11 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         hits.push(row, Action::FocusField(*field));
 
         let marker = if pending.contains(field) { "•" } else { " " };
-        let live = if field.is_live() && app.has_session() { "live" } else { "" };
+        let live = if field.is_live() && app.has_session() {
+            "live"
+        } else {
+            ""
+        };
         let label = format!("{marker} {:<12}", field.label());
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -160,8 +188,11 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         };
         frame.render_widget(Paragraph::new(Span::styled(" ◂", arrow(dec))), dec);
         frame.render_widget(
-            Paragraph::new(Span::styled(format!("{value:^w$}", w = value_w as usize), row_style))
-                .style(row_style),
+            Paragraph::new(Span::styled(
+                format!("{value:^w$}", w = value_w as usize),
+                row_style,
+            ))
+            .style(row_style),
             Rect::new(x + 2, y, value_w, 1),
         );
         frame.render_widget(Paragraph::new(Span::styled("▸ ", arrow(inc))), inc);
@@ -172,9 +203,12 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let hint_y = inner.y + ConfigField::ALL.len() as u16 + 1;
     if hint_y < inner.bottom() {
         let hint = if !pending.is_empty() {
-            Line::styled("• changed — Recreate (R) to apply", Style::new().fg(theme::WARN))
+            Line::styled(
+                "• changed — Recreate (R) to apply",
+                Style::new().fg(theme::WARN),
+            )
         } else if app.has_session() {
-            Line::styled("timestep applies live; others need Recreate", theme::faint())
+            Line::styled("dt is live · others need R", theme::faint())
         } else {
             Line::styled("↑↓ select · ←→ adjust · n create", theme::faint())
         };
@@ -198,20 +232,47 @@ fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
     let l = inv.angular_momentum;
     let w = 14;
     let lines = vec![
-        widgets::kv("H", Span::styled(format!("{:.6e}", inv.energy), theme::value()), w),
-        widgets::kv("H₀", Span::styled(format!("{:.6e}", inv.initial_energy), theme::value()), w),
-        widgets::kv("|ΔH|/|H₀|", Span::styled(fmt::sci(rel), theme::energy_error(rel)), w),
-        widgets::kv("|p|", Span::styled(fmt::sci(inv.momentum_magnitude()), theme::value()), w),
         widgets::kv(
-            "L",
-            Span::styled(format!("[{:.3}, {:.3}, {:.3}]", l[0], l[1], l[2]), theme::value()),
+            "H",
+            Span::styled(format!("{:.6e}", inv.energy), theme::value()),
             w,
         ),
-        widgets::kv("ω error", Span::styled(fmt::sci(inv.symplectic_error), theme::value()), w),
+        widgets::kv(
+            "H₀",
+            Span::styled(format!("{:.6e}", inv.initial_energy), theme::value()),
+            w,
+        ),
+        widgets::kv(
+            "|ΔH|/|H₀|",
+            Span::styled(fmt::sci(rel), theme::energy_error(rel)),
+            w,
+        ),
+        widgets::kv(
+            "|p|",
+            Span::styled(fmt::sci(inv.momentum_magnitude()), theme::value()),
+            w,
+        ),
+        widgets::kv(
+            "L",
+            Span::styled(
+                format!("[{:.3}, {:.3}, {:.3}]", l[0], l[1], l[2]),
+                theme::value(),
+            ),
+            w,
+        ),
+        widgets::kv(
+            "ω error",
+            Span::styled(fmt::sci(inv.symplectic_error), theme::value()),
+            w,
+        ),
         widgets::kv(
             "symplectic",
             Span::styled(
-                if s.config.integrator.is_symplectic() { "yes" } else { "no" },
+                if s.config.integrator.is_symplectic() {
+                    "yes"
+                } else {
+                    "no"
+                },
                 theme::value(),
             ),
             w,
@@ -225,7 +286,12 @@ fn perf_panel(app: &App, frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let Some(s) = &app.sim.snapshot else {
-        widgets::empty_state(frame, inner, "no session", "performance appears once created");
+        widgets::empty_state(
+            frame,
+            inner,
+            "no session",
+            "performance appears once created",
+        );
         return;
     };
     let p = &s.perf;
@@ -238,13 +304,32 @@ fn perf_panel(app: &App, frame: &mut Frame, area: Rect) {
     ])
     .areas(inner);
     let lines = vec![
-        widgets::kv("step", Span::styled(fmt::duration(p.step_time), theme::value()), w),
-        widgets::kv("throughput", Span::styled(fmt::rate(p.particles_per_sec), theme::value()), w),
-        widgets::kv("memory", Span::styled(fmt::bytes(p.memory_bytes), theme::value()), w),
-        widgets::kv("layout", Span::styled(s.config.layout.to_string(), theme::value()), w),
+        widgets::kv(
+            "step",
+            Span::styled(fmt::duration(p.step_time), theme::value()),
+            w,
+        ),
+        widgets::kv(
+            "throughput",
+            Span::styled(fmt::rate(p.particles_per_sec), theme::value()),
+            w,
+        ),
+        widgets::kv(
+            "memory",
+            Span::styled(fmt::bytes(p.memory_bytes), theme::value()),
+            w,
+        ),
+        widgets::kv(
+            "layout",
+            Span::styled(s.config.layout.to_string(), theme::value()),
+            w,
+        ),
     ];
     frame.render_widget(Paragraph::new(lines), text);
-    frame.render_widget(Paragraph::new(Span::styled("SIMD lane utilization", theme::label())), gauge_label);
+    frame.render_widget(
+        Paragraph::new(Span::styled("SIMD lane utilization", theme::label())),
+        gauge_label,
+    );
     frame.render_widget(
         Gauge::default()
             .gauge_style(Style::new().fg(theme::ACCENT).bg(theme::SURFACE))
