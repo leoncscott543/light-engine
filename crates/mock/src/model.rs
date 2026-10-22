@@ -6,6 +6,7 @@ use light_contracts::{
     Integrator, Invariants, Layout, SimConfig, SimSnapshot, SimStatus, StepPerf,
 };
 
+use crate::particles::ParticleField;
 use crate::rng::Rng;
 
 /// Coefficients per particle: position + momentum, grades 0..=2 in 3D (1+3+3).
@@ -73,6 +74,18 @@ impl Session {
             sim_time: self.tick as f64 * self.config.dt,
             invariants: self.invariants(),
             perf: self.perf,
+        }
+    }
+
+    /// The full particle state at the current tick.
+    pub fn particles(&self) -> ParticleField {
+        ParticleField {
+            seed: self.config.seed,
+            count: u64::from(self.config.particle_count),
+            layout: self.config.layout,
+            tick: self.tick,
+            sim_time: self.tick as f64 * self.config.dt,
+            energy_error: self.energy_error(),
         }
     }
 

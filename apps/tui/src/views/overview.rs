@@ -188,7 +188,7 @@ fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
                 .key("x")
                 .danger()
                 .enabled(running),
-            Button::new("Open", Action::GoTo(Tab::Benchmarks)).key("3"),
+            Button::new("Open", Action::GoTo(Tab::Benchmarks)).key("4"),
         ],
         app.mouse,
         hits,

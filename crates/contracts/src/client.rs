@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::bench::{BenchDescriptor, BenchError, BenchEvent, BenchId, BenchRunConfig};
 use crate::error::ClientError;
+use crate::explore::{ParticleFrame, ParticleRequest};
 use crate::log::LogEntry;
 use crate::process::ProcessInfo;
 use crate::sim::{SimCommand, SimSnapshot};
@@ -55,6 +56,10 @@ pub trait SimClient: Send {
     fn snapshot(&self) -> Option<SimSnapshot>;
 
     fn command(&mut self, command: SimCommand) -> Result<(), ClientError>;
+
+    /// Queries every particle of the current state. The table, statistics, and
+    /// histogram in the returned frame all describe the same tick.
+    fn particles(&self, request: &ParticleRequest) -> Result<ParticleFrame, ClientError>;
 
     /// Processes owned by the simulation backend.
     fn processes(&self) -> Vec<ProcessInfo>;

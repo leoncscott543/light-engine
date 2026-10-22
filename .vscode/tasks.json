@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "SimTUI: live development",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--locked",
+                "-p",
+                "light_tui",
+                "--bin",
+                "light-dev",
+                "--",
+                "--session"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "clear": false
+            }
+        }
+    ]
+}

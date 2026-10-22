@@ -64,6 +64,46 @@ invariants and performance are synthetic, not measurements of a physics kernel.
 
 ## Development
 
+### Live dashboard development
+
+Start the watcher in an interactive terminal:
+
+```sh
+cargo run --locked -p light_tui --bin light-dev -- --session
+```
+
+Or run **Tasks: Run Task > SimTUI: live development** in VS Code. Keep that
+terminal visible while editing; saving Rust files automatically refreshes the
+dashboard. Dashboard arguments, such as `--seed 0x1234 --benches builtin`, are
+forwarded unchanged.
+
+The launcher polls file contents every 100 ms and debounces saves for 300 ms.
+It watches Rust sources and Cargo manifests/lockfiles under `apps`, `crates`,
+and `src`, plus the root manifests, Rust toolchain files, and `.cargo` build
+configuration. New, deleted, and renamed files are detected. Build output,
+Git metadata, local environment files, and editor temporary files are ignored.
+No extra watcher tool or package installation is needed.
+
+On a change, the dashboard gracefully exits and restores the terminal before
+Cargo rebuilds it. Successful builds relaunch automatically; compiler errors
+remain visible and the next edit retries. Edits during a build cause another
+build instead of launching stale output. Builds use `--locked`; intentionally
+changed dependencies may require updating the lockfile separately. Development
+builds live in `target/simtui-dev`, separate from the running launcher.
+
+This is **rebuild/restart**, not Rust code replacement inside a running process.
+It changes neither `SimClient` nor `BenchClient` and does not depend on a mock
+backend. TUI selection/history and any backend state owned by the TUI process
+reset on restart; `--session` creates a fresh idle mock session each time.
+Quitting the dashboard also stops the watcher. After a failed build, Ctrl+C
+stops the waiting launcher. Restart the launcher after editing its own source.
+
+Focused watcher, shutdown-handshake, and child-process lifecycle tests:
+
+```sh
+cargo test --locked -p light_tui --lib --bin light-dev
+```
+
 CI checks formatting, Clippy, release builds, and tests for the entire workspace
 on Linux, Windows, and macOS. Run the same checks before opening a pull request:
 

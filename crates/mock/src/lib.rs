@@ -10,6 +10,7 @@
 mod bench;
 mod client;
 mod model;
+mod particles;
 mod rng;
 
 pub use bench::{MockBench, registry as bench_registry};

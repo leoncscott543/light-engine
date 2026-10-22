@@ -73,6 +73,23 @@ pub fn sci(v: f64) -> String {
     }
 }
 
+/// Compact numeric cell (at most ~8 chars) with about four significant digits.
+pub fn value(v: f64, integer: bool) -> String {
+    let a = v.abs();
+    if !v.is_finite() {
+        format!("{v}")
+    } else if integer && a < 1e9 {
+        format!("{v:.0}")
+    } else if a == 0.0 {
+        "0".into()
+    } else if (1e-3..1e5).contains(&a) {
+        let prec = (3 - a.log10().floor() as i32).clamp(0, 5) as usize;
+        format!("{v:.prec$}")
+    } else {
+        format!("{v:.2e}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,6 +97,10 @@ mod tests {
     #[test]
     fn formats() {
         assert_eq!(duration(Duration::from_nanos(850)), "850ns");
+        assert_eq!(value(4096.0, true), "4096");
+        assert_eq!(value(1.23456, false), "1.235");
+        assert_eq!(value(-0.0012344, false), "-0.00123");
+        assert_eq!(value(123456.0, false), "1.23e5");
         assert_eq!(duration(Duration::from_micros(12_400)), "12.40ms");
         assert_eq!(uptime(Duration::from_secs(187)), "3m07s");
         assert_eq!(bytes(1536), "1.5 KiB");

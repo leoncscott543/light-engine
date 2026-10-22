@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
 use light_contracts::{
-    BackendEvent, BackendInfo, BackendKind, ClientError, LogEntry, LogLevel, ProcessId,
-    ProcessInfo, ProcessKind, ProcessState, SimClient, SimCommand, SimConfig, SimSnapshot,
-    SimStatus,
+    BackendEvent, BackendInfo, BackendKind, ClientError, LogEntry, LogLevel, ParticleFrame,
+    ParticleRequest, ProcessId, ProcessInfo, ProcessKind, ProcessState, SimClient, SimCommand,
+    SimConfig, SimSnapshot, SimStatus, execute,
 };
 
 use crate::model::Session;
@@ -216,6 +216,11 @@ impl SimClient for MockClient {
         Ok(())
     }
 
+    fn particles(&self, request: &ParticleRequest) -> Result<ParticleFrame, ClientError> {
+        let session = self.session.as_ref().ok_or(ClientError::NoSession)?;
+        Ok(execute(&session.particles(), request))
+    }
+
     fn processes(&self) -> Vec<ProcessInfo> {
         let mut rng = Rng::new(self.seed ^ self.clock.as_millis() as u64);
         let uptime = self.clock;
@@ -360,5 +365,40 @@ mod tests {
         c.command(SimCommand::Create(SimConfig::default())).unwrap();
         c.command(SimCommand::Start).unwrap();
         assert_eq!(c.processes()[0].state, ProcessState::Running);
+    }
+
+    #[test]
+    fn particles_require_a_session_and_share_one_tick() {
+        use light_contracts::{BinValue, HistogramSpec, ParticleQuery};
+
+        let mut c = MockClient::new(1);
+        let request = ParticleRequest {
+            query: ParticleQuery::parse("where activity > 0.5 order by energy desc limit 5")
+                .unwrap(),
+            histogram: Some(HistogramSpec {
+                value: BinValue::Count,
+                ..HistogramSpec::default()
+            }),
+        };
+        assert_eq!(c.particles(&request), Err(ClientError::NoSession));
+
+        c.command(SimCommand::Create(SimConfig::default())).unwrap();
+        c.command(SimCommand::Step(10)).unwrap();
+        let frame = c.particles(&request).unwrap();
+        assert_eq!(frame.tick, 10);
+        assert_eq!(
+            frame.scanned,
+            u64::from(SimConfig::default().particle_count)
+        );
+        assert!(frame.matched > 0 && frame.matched < frame.scanned);
+        assert_eq!(frame.rows.len(), 5);
+        let energies: Vec<f64> = frame
+            .rows
+            .iter()
+            .map(|r| r.get(light_contracts::ParticleField::Energy))
+            .collect();
+        assert!(energies.windows(2).all(|w| w[0] >= w[1]));
+        let h = frame.histogram.unwrap();
+        assert_eq!(u64::from(h.counts.iter().sum::<u32>()), frame.matched);
     }
 }

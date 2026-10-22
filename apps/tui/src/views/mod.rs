@@ -5,6 +5,7 @@ mod charts;
 mod chrome;
 mod logs;
 mod overview;
+mod particles;
 mod processes;
 mod simulation;
 
@@ -31,6 +32,7 @@ pub fn render(app: &App, frame: &mut Frame, hits: &mut HitMap) {
     match app.tab {
         Tab::Overview => overview::render(app, frame, body, hits),
         Tab::Simulation => simulation::render(app, frame, body, hits),
+        Tab::Particles => particles::render(app, frame, body, hits),
         Tab::Benchmarks => benchmarks::render(app, frame, body, hits),
         Tab::Processes => processes::render(app, frame, body, hits),
         Tab::Logs => logs::render(app, frame, body, hits),
@@ -108,5 +110,90 @@ mod tests {
             app.update(Action::RunBench);
             draw(&app, 120, 40);
         }
+    }
+
+    /// The heatmap and table are two views of one frame: same tick, same
+    /// matches, and clicking a heatmap bin narrows the shared query.
+    #[test]
+    fn heatmap_and_table_share_one_state() {
+        use crate::explorer::ExplorerAction;
+
+        let mut app = crate::app::testing::mock_app(3);
+        app.update(Action::CreateSession);
+        app.update(Action::Step(25));
+        app.update(Action::GoTo(Tab::Particles));
+        draw(&app, 160, 48);
+        app.tick();
+
+        let pf = app.explorer.frame.clone().expect("frame after refresh");
+        let h = pf.histogram.as_ref().unwrap();
+        assert_eq!(pf.tick, 25);
+        assert_eq!(
+            h.counts.iter().map(|&c| u64::from(c)).sum::<u64>(),
+            pf.matched
+        );
+        assert_eq!(app.explorer.viewport.get(), Some((h.bins_x, h.bins_y / 2)));
+
+        let hits = draw(&app, 160, 48);
+        let cells: Vec<(u16, u16)> = (0..48)
+            .flat_map(|y| (0..160).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                matches!(
+                    hits.at(x, y),
+                    Some(Action::Explore(ExplorerAction::Drill { .. }))
+                )
+            })
+            .collect();
+        assert!(!cells.is_empty(), "heatmap cells are clickable");
+        let span = |f: fn(&(u16, u16)) -> u16| {
+            let v: Vec<u16> = cells.iter().map(f).collect();
+            (v.iter().min().unwrap() + v.iter().max().unwrap()) / 2
+        };
+        let (x, y) = (span(|c| c.0), span(|c| c.1));
+        app.update(hits.at(x, y).unwrap());
+
+        let sub = app.explorer.frame.as_ref().unwrap();
+        assert_eq!(app.explorer.query.filters.len(), 2);
+        assert_eq!(sub.tick, pf.tick);
+        assert!(
+            sub.matched > 0 && sub.matched < pf.matched,
+            "{} of {} via {:?} at {x},{y}: {}",
+            sub.matched,
+            pf.matched,
+            hits.at(x, y),
+            app.explorer.query
+        );
+        assert!(
+            sub.rows
+                .iter()
+                .all(|r| app.explorer.query.matches(&r.values))
+        );
+
+        app.update(Action::Explore(ExplorerAction::PopFilter));
+        app.update(Action::Explore(ExplorerAction::PopFilter));
+        assert_eq!(app.explorer.frame.as_ref().unwrap().matched, pf.matched);
+    }
+
+    #[test]
+    fn particles_tab_is_usable_without_a_session() {
+        use crate::explorer::ExplorerAction;
+
+        let mut app = crate::app::testing::mock_app(3);
+        app.update(Action::GoTo(Tab::Particles));
+        app.update(Action::Explore(ExplorerAction::EditQuery));
+        app.update(Action::Explore(ExplorerAction::Insert('!')));
+        app.update(Action::Explore(ExplorerAction::Submit));
+        assert!(app.explorer.error.is_some());
+        draw(&app, 120, 40);
+        app.update(Action::Explore(ExplorerAction::CancelEdit));
+        let hits = draw(&app, 120, 40);
+        let creates = (0..40)
+            .flat_map(|y| (0..120).map(move |x| (x, y)))
+            .any(|(x, y)| hits.at(x, y) == Some(Action::CreateSession));
+        assert!(creates, "empty state offers to create a session");
+        app.update(Action::CreateSession);
+        draw(&app, 120, 40);
+        app.tick();
+        assert!(app.explorer.frame.is_some());
     }
 }

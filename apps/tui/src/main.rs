@@ -10,6 +10,8 @@
 
 mod action;
 mod app;
+mod colormap;
+mod explorer;
 mod fmt;
 mod hit;
 mod input;
@@ -25,6 +27,7 @@ use std::time::{Duration, Instant};
 use light_bench::{BenchRuntime, Registry};
 use light_contracts::{BenchClient, SimClient, SimConfig};
 use light_mock::MockClient;
+use light_tui::reload;
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, DisableMouseCapture, EnableMouseCapture};
 use ratatui::crossterm::execute;
@@ -145,7 +148,11 @@ fn isolate_bench_panics() {
 
 fn run(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     let mut hits = HitMap::default();
+    let reload = reload::Signal::from_env();
     while app.running {
+        if reload.requested()? {
+            break;
+        }
         let frame_start = Instant::now();
         app.tick();
 

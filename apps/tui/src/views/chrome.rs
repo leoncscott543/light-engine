@@ -6,6 +6,7 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use crate::action::Action;
 use crate::app::{App, Tab};
+use crate::explorer::ExplorerAction;
 use crate::hit::HitMap;
 use crate::theme;
 use crate::widgets::{self, hovered};
@@ -87,6 +88,37 @@ fn hints(app: &App) -> Vec<(&'static str, &'static str, Action)> {
             ("←→", "adjust", Action::AdjustField(app.sim.field, 1)),
             ("R", "recreate", Action::RecreateSession),
         ],
+        Tab::Particles if app.explorer.editing => vec![
+            ("enter", "apply", Action::Explore(ExplorerAction::Submit)),
+            ("esc", "cancel", Action::Explore(ExplorerAction::CancelEdit)),
+            ("tab", "complete", Action::Explore(ExplorerAction::Complete)),
+            (
+                "↑↓",
+                "history",
+                Action::Explore(ExplorerAction::History(-1)),
+            ),
+        ],
+        Tab::Particles => vec![
+            ("/", "query", Action::Explore(ExplorerAction::EditQuery)),
+            ("x y", "axes", Action::Explore(ExplorerAction::CycleX(1))),
+            ("m", "mode", Action::Explore(ExplorerAction::CycleMode)),
+            (
+                "←→",
+                "field",
+                Action::Explore(ExplorerAction::CycleField(1)),
+            ),
+            (
+                "c",
+                "colors",
+                Action::Explore(ExplorerAction::CycleColormap),
+            ),
+            (
+                "⌫",
+                "pop filter",
+                Action::Explore(ExplorerAction::PopFilter),
+            ),
+            ("a", "live", Action::Explore(ExplorerAction::ToggleLive)),
+        ],
         Tab::Benchmarks => vec![
             ("enter", "run", Action::RunBench),
             ("x", "cancel", Action::CancelBench),
@@ -149,7 +181,7 @@ pub fn footer(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 }
 
 const HELP: &[(&str, &str)] = &[
-    ("1-5 / tab", "switch tab (or click a tab)"),
+    ("1-6 / tab", "switch tab (or click a tab)"),
     ("↑↓ j k / wheel", "move selection, scroll"),
     ("pgup pgdn home end", "jump"),
     ("", ""),
@@ -159,6 +191,14 @@ const HELP: &[(&str, &str)] = &[
     ("r", "reset session (sim & overview tabs)"),
     ("R / D", "recreate / destroy session"),
     ("←→ h l - +", "adjust selected config field"),
+    ("", ""),
+    ("/ e", "particles: edit query (tab completes)"),
+    ("x X  y Y", "heatmap axes"),
+    ("m  ←→ f F", "bin mode, aggregated field"),
+    ("c / o / z", "colormap, log scale, zoom heatmap"),
+    ("click heatmap", "drill into bin (⌫ pops, r resets)"),
+    ("click header / s", "sort table by column / heat field"),
+    ("a / enter", "live refresh, refresh now"),
     ("", ""),
     ("enter / r", "run selected benchmark"),
     ("x", "cancel running benchmark"),

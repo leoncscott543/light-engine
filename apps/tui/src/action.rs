@@ -1,4 +1,5 @@
 use crate::app::{ConfigField, Tab};
+use crate::explorer::ExplorerAction;
 
 /// Every user intent the TUI understands. Input mapping produces these;
 /// [`crate::app::App::update`] is the only place they are applied.
@@ -47,4 +48,7 @@ pub enum Action {
     CycleLogLevel,
     ToggleFollow,
     ClearLogs,
+
+    // particles
+    Explore(ExplorerAction),
 }

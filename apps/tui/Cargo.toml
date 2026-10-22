@@ -9,6 +9,10 @@ license-file.workspace = true
 name = "light"
 path = "src/main.rs"
 
+[[bin]]
+name = "light-dev"
+path = "src/dev/main.rs"
+
 [dependencies]
 light_bench.workspace = true
 light_contracts.workspace = true

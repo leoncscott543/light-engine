@@ -9,6 +9,7 @@ use light_contracts::{
 };
 
 use crate::action::Action;
+use crate::explorer::Explorer;
 
 const HISTORY: usize = 240;
 const LOG_CAPACITY: usize = 5_000;
@@ -20,15 +21,17 @@ const PAGE: usize = 10;
 pub enum Tab {
     Overview,
     Simulation,
+    Particles,
     Benchmarks,
     Processes,
     Logs,
 }
 
 impl Tab {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Overview,
         Self::Simulation,
+        Self::Particles,
         Self::Benchmarks,
         Self::Processes,
         Self::Logs,
@@ -38,6 +41,7 @@ impl Tab {
         match self {
             Self::Overview => "Overview",
             Self::Simulation => "Simulation",
+            Self::Particles => "Particles",
             Self::Benchmarks => "Benchmarks",
             Self::Processes => "Processes",
             Self::Logs => "Logs",
@@ -344,6 +348,7 @@ pub struct App {
     pub show_help: bool,
     pub mouse: Option<(u16, u16)>,
     pub sim: SimView,
+    pub explorer: Explorer,
     pub bench: BenchView,
     pub procs: ProcessView,
     pub logs: LogView,
@@ -379,6 +384,7 @@ impl App {
                 step_us: Series::new(HISTORY),
                 throughput: Series::new(HISTORY),
             },
+            explorer: Explorer::default(),
             bench: BenchView {
                 list: benches,
                 selected: 0,
@@ -425,6 +431,7 @@ impl App {
     pub fn tick(&mut self) {
         self.pump();
         let now = Instant::now();
+        self.refresh_particles(now);
         if self
             .procs
             .last_refresh
@@ -451,6 +458,29 @@ impl App {
         }
     }
 
+    /// Fetches one particle frame (table, stats, and heatmap from the same
+    /// state) while the Particles tab is visible.
+    fn refresh_particles(&mut self, now: Instant) {
+        if self.tab != Tab::Particles {
+            return;
+        }
+        let Some(tick) = self.sim.snapshot.as_ref().map(|s| s.tick) else {
+            self.explorer.frame = None;
+            return;
+        };
+        if !self.explorer.needs_refresh(tick, now) {
+            return;
+        }
+        match self.sim_client.particles(&self.explorer.request()) {
+            Ok(frame) => self.explorer.accept(frame, now),
+            Err(err) => {
+                if self.explorer.fail(now) {
+                    self.notify(LogLevel::Error, format!("particle query failed: {err}"));
+                }
+            }
+        }
+    }
+
     fn pump(&mut self) {
         for event in self.sim_client.poll() {
             self.on_backend(event);
@@ -469,7 +499,10 @@ impl App {
             }
             BackendEvent::SessionChanged(snapshot) => {
                 match &snapshot {
-                    None => self.sim.clear_history(),
+                    None => {
+                        self.sim.clear_history();
+                        self.explorer.clear();
+                    }
                     Some(s) if s.tick == 0 => {
                         self.sim.clear_history();
                         self.sim.record(s);
@@ -572,7 +605,13 @@ impl App {
             Action::Hover(x, y) => self.mouse = Some((x, y)),
             Action::NextTab => self.tab = self.tab.offset(1),
             Action::PrevTab => self.tab = self.tab.offset(-1),
-            Action::GoTo(tab) => self.tab = tab,
+            Action::GoTo(tab) => {
+                self.tab = tab;
+                if tab == Tab::Particles {
+                    self.explorer.mark_dirty();
+                    self.refresh_particles(Instant::now());
+                }
+            }
 
             Action::Up => self.navigate(-1),
             Action::Down => self.navigate(1),
@@ -652,6 +691,11 @@ impl App {
                 self.logs.entries.clear();
                 self.logs.scroll = 0;
             }
+
+            Action::Explore(action) => {
+                self.explorer.apply(action);
+                self.refresh_particles(Instant::now());
+            }
         }
     }
 
@@ -670,6 +714,10 @@ impl App {
             Tab::Simulation => {
                 let i = self.sim.field_index();
                 self.sim.field = ConfigField::ALL[move_in(i, ConfigField::ALL.len())];
+            }
+            Tab::Particles => {
+                let i = move_in(self.explorer.selected, self.explorer.row_count());
+                self.explorer.select(i);
             }
             Tab::Benchmarks => {
                 self.bench.selected = move_in(self.bench.selected, self.bench.list.len());
@@ -697,6 +745,7 @@ impl App {
                     self.sim.field = *f;
                 }
             }
+            Tab::Particles => self.explorer.select(i),
             Tab::Benchmarks if i < self.bench.list.len() => self.bench.selected = i,
             Tab::Processes if i < self.procs.list.len() => self.procs.selected = i,
             _ => {}
