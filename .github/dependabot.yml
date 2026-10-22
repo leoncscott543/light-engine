@@ -10,23 +10,28 @@ updates:
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
 
   # Dockerfile dependencies
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
 
   # Rust (Cargo.toml/Cargo.lock)
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    groups:
+      rust-dependencies:
+        patterns: ["*"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]

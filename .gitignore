@@ -7,3 +7,8 @@
 # Added by cargo
 
 /target
+
+# Local configuration must not be published.
+.env
+.env.*
+!.env.example
