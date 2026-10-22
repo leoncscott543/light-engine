@@ -1,0 +1,8 @@
+[package]
+name = "light_contracts"
+description = "Shared data contracts between the Light simulation backends and front ends."
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]

@@ -1,7 +1,21 @@
+[workspace]
+members = ["apps/tui", "crates/bench"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license-file = "LICENSE.md"
+
+[workspace.dependencies]
+light_bench = { path = "crates/bench" }
+light_contracts = { path = "crates/contracts" }
+light_mock = { path = "crates/mock" }
+ratatui = "0.30"
+
 [package]
 name = "light_engine" # The name of the package or project.
 version = "0.1.0" # The current version of the package.
 edition = "2024" # Specifies the Rust edition being used (e.g., 2024 edition).
 
 [dependencies]
-

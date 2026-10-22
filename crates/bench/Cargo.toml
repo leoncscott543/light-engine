@@ -1,0 +1,9 @@
+[package]
+name = "light_bench"
+description = "Benchmark harness and live metrics for the Light kernel."
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+light_contracts.workspace = true

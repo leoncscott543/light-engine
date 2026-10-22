@@ -4,5 +4,11 @@
         "plaintext": false,
         "markdown": false,
         "scminput": false
+    },
+    "chat.tools.terminal.autoApprove": {
+        "/^cargo check$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

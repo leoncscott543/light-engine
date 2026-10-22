@@ -1,0 +1,15 @@
+[package]
+name = "light_tui"
+description = "Interactive terminal dashboard for monitoring and benchmarking the Light simulation."
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[[bin]]
+name = "light"
+path = "src/main.rs"
+
+[dependencies]
+light_contracts.workspace = true
+light_mock.workspace = true
+ratatui.workspace = true
