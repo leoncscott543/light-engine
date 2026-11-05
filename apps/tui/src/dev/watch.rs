@@ -56,6 +56,7 @@ fn snapshot(root: &Path) -> io::Result<Snapshot> {
     for name in [
         "Cargo.toml",
         "Cargo.lock",
+        "build.rs",
         "rust-toolchain",
         "rust-toolchain.toml",
     ] {

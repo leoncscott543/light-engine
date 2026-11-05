@@ -54,9 +54,17 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         heatmap(app, frame, body, hits);
         return;
     }
+    if area.width < 100 {
+        table(app, frame, body, hits);
+        return;
+    }
     let [left, right] =
         Layout::horizontal([Constraint::Percentage(55), Constraint::Min(0)]).areas(body);
     heatmap(app, frame, left, hits);
+    if area.height < 34 {
+        table(app, frame, right, hits);
+        return;
+    }
     let [table_area, inspector_area] =
         Layout::vertical([Constraint::Min(6), Constraint::Length(INSPECTOR_H)]).areas(right);
     table(app, frame, table_area, hits);
@@ -78,7 +86,7 @@ fn query_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     }
 
     let run = if ex.editing { A::Submit } else { A::Refresh };
-    let mut live = Button::new("Live", Action::Explore(A::ToggleLive)).key("a");
+    let mut live = Button::new("Auto", Action::Explore(A::ToggleLive)).key("a");
     if ex.live {
         live = live.primary();
     }
@@ -119,14 +127,18 @@ fn query_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let under = chars.get(cursor).map_or(" ".into(), |c| c.to_string());
         spans.push(Span::styled(
             under,
-            Style::new().bg(theme::GOLD).fg(theme::BG),
+            Style::new()
+                .bg(theme::palette().gold)
+                .fg(theme::palette().bg),
         ));
         spans.push(Span::styled(slice(cursor + 1, end), theme::value()));
     } else {
         let style = if hovered(app.mouse, text_area) {
-            Style::new().bg(theme::HOVER).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().hover)
+                .fg(theme::palette().text)
         } else {
-            Style::new().fg(theme::TEXT)
+            Style::new().fg(theme::palette().text)
         };
         let mut text = slice(0, end);
         if end < chars.len() && avail > 1 {
@@ -160,7 +172,9 @@ fn query_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             Span::raw(" ".repeat(pad)),
             Span::styled(
                 format!("▲ {}", err.message),
-                Style::new().fg(theme::ERR).add_modifier(Modifier::BOLD),
+                Style::new()
+                    .fg(theme::palette().err)
+                    .add_modifier(Modifier::BOLD),
             ),
         ])
     } else {
@@ -175,22 +189,35 @@ fn query_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 fn status_line(ex: &Explorer) -> Line<'static> {
     let sep = || Span::styled("  ·  ", theme::faint());
     let Some(pf) = &ex.frame else {
-        return Line::styled("  no data yet", theme::dim());
+        return Line::styled(
+            if ex.loading {
+                "  querying backend..."
+            } else {
+                "  no data yet"
+            },
+            theme::dim(),
+        );
     };
     let pct = if pf.scanned == 0 {
         0.0
     } else {
         pf.matched as f64 / pf.scanned as f64 * 100.0
     };
-    let live = if ex.live {
+    let live = if ex.loading {
+        Span::styled("refreshing", theme::dim())
+    } else if ex.live {
         Span::styled(
             "● live",
-            Style::new().fg(theme::OK).add_modifier(Modifier::BOLD),
+            Style::new()
+                .fg(theme::palette().ok)
+                .add_modifier(Modifier::BOLD),
         )
     } else {
         Span::styled(
             "❚❚ frozen",
-            Style::new().fg(theme::HONEY).add_modifier(Modifier::BOLD),
+            Style::new()
+                .fg(theme::palette().honey)
+                .add_modifier(Modifier::BOLD),
         )
     };
     Line::from(vec![
@@ -374,8 +401,8 @@ fn heatmap(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             let bottom = color_of(bx, plot.by(h, cy * 2 + 1));
             if let Some(cell) = buf.cell_mut((plot_area.x + cx, plot_area.y + cy)) {
                 cell.set_char('▀')
-                    .set_fg(top.unwrap_or(theme::SURFACE))
-                    .set_bg(bottom.unwrap_or(theme::SURFACE));
+                    .set_fg(top.unwrap_or(theme::palette().surface))
+                    .set_bg(bottom.unwrap_or(theme::palette().surface));
             }
         }
     }
@@ -573,7 +600,8 @@ fn table(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         None => String::new(),
     };
     let title = format!(
-        "Rows {}–{} of {} matched{sort}",
+        "{} · Rows {}–{} of {} matched{sort}",
+        pf.meta.label(),
         ex.query.offset + u64::from(!pf.rows.is_empty()),
         ex.query.offset + pf.rows.len() as u64,
         fmt::count(pf.matched),
@@ -619,8 +647,8 @@ fn table(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             theme::selected()
         } else if hovered(app.mouse, rect) {
             Style::new()
-                .bg(theme::HOVER)
-                .fg(theme::GOLD)
+                .bg(theme::palette().hover)
+                .fg(theme::palette().gold)
                 .add_modifier(Modifier::BOLD)
         } else {
             theme::title()
@@ -642,7 +670,12 @@ fn table(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         .unwrap_or((0.0, 1.0));
     let body = Rect::new(inner.x, inner.y + 1, inner.width, inner.height - 1);
     let height = body.height as usize;
-    let offset = widgets::scroll_offset(ex.selected, height);
+    let offset = ex
+        .table_viewport
+        .range(ex.selected, pf.rows.len(), height)
+        .start;
+    widgets::scrollbar(frame, area, pf.rows.len(), offset, height);
+    widgets::scrollbar_hits(area, pf.rows.len(), height, hits);
     for (line, (i, row)) in pf
         .rows
         .iter()
@@ -655,7 +688,9 @@ fn table(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let style = if i == ex.selected {
             theme::selected()
         } else if hovered(app.mouse, rect) {
-            Style::new().bg(theme::HOVER).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().hover)
+                .fg(theme::palette().text)
         } else {
             theme::base()
         };
@@ -735,7 +770,9 @@ fn inspector(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let style = if is_heat {
             theme::selected()
         } else if hovered(app.mouse, rect) {
-            Style::new().bg(theme::HOVER).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().hover)
+                .fg(theme::palette().text)
         } else {
             theme::base()
         };
@@ -749,8 +786,11 @@ fn inspector(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             }
         });
         let mut spans = vec![
-            Span::styled(tag, style.fg(theme::GOLD)),
-            Span::styled(format!("{:<9}", field.name()), style.fg(theme::TEXT_DIM)),
+            Span::styled(tag, style.fg(theme::palette().gold)),
+            Span::styled(
+                format!("{:<9}", field.name()),
+                style.fg(theme::palette().text_dim),
+            ),
             Span::styled(
                 format!("{:>NUM$} ", fmt::value(v, field.is_integer())),
                 style.add_modifier(Modifier::BOLD),
@@ -763,7 +803,7 @@ fn inspector(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             for value in &values[..stat_cols] {
                 spans.push(Span::styled(
                     format!("{:>NUM$}", fmt::value(*value, false)),
-                    style.fg(theme::TEXT_DIM),
+                    style.fg(theme::palette().text_dim),
                 ));
             }
         }

@@ -1,5 +1,6 @@
 [package]
 name = "light_tui"
+default-run = "light"
 description = "Interactive terminal dashboard for monitoring and benchmarking the Light simulation."
 version.workspace = true
 edition.workspace = true
@@ -17,4 +18,5 @@ path = "src/dev/main.rs"
 light_bench.workspace = true
 light_contracts.workspace = true
 light_mock.workspace = true
+light_runtime.workspace = true
 ratatui.workspace = true

@@ -19,6 +19,8 @@ impl fmt::Display for BenchId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BenchDescriptor {
+    /// Workload origin. `timing` may be live even for a mock workload.
+    pub meta: crate::ObservationMeta,
     pub id: BenchId,
     /// Grouping used by front ends, e.g. `"kernel"`, `"layout"`.
     pub group: String,
@@ -93,6 +95,7 @@ fn percentile(sorted: &[Duration], q: f64) -> Duration {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BenchEvent {
     Started {
+        meta: crate::ObservationMeta,
         id: BenchId,
         config: BenchRunConfig,
     },

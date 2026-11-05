@@ -5,6 +5,8 @@ use ratatui::style::Color;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Colormap {
+    /// Follows the active palette, including single-hue light themes.
+    Theme,
     Turbo,
     Inferno,
     Viridis,
@@ -29,10 +31,17 @@ const BUTTER: &[u32] = &[
 ];
 
 impl Colormap {
-    pub const ALL: [Self; 4] = [Self::Turbo, Self::Inferno, Self::Viridis, Self::Butter];
+    pub const ALL: [Self; 5] = [
+        Self::Theme,
+        Self::Turbo,
+        Self::Inferno,
+        Self::Viridis,
+        Self::Butter,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
+            Self::Theme => "theme",
             Self::Turbo => "turbo",
             Self::Inferno => "inferno",
             Self::Viridis => "viridis",
@@ -42,6 +51,7 @@ impl Colormap {
 
     fn stops(self) -> &'static [u32] {
         match self {
+            Self::Theme => VIRIDIS,
             Self::Turbo => TURBO,
             Self::Inferno => INFERNO,
             Self::Viridis => VIRIDIS,
@@ -50,6 +60,19 @@ impl Colormap {
     }
 
     pub fn rgb(self, t: f64) -> (u8, u8, u8) {
+        if self == Self::Theme && crate::theme::current().is_light() {
+            let palette = crate::theme::palette();
+            if let (Color::Rgb(ar, ag, ab), Color::Rgb(br, bg, bb)) = (palette.bg, palette.gold) {
+                let t = if t.is_finite() {
+                    t.clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let mix =
+                    |a: u8, b: u8| (f64::from(a) + (f64::from(b) - f64::from(a)) * t).round() as u8;
+                return (mix(ar, br), mix(ag, bg), mix(ab, bb));
+            }
+        }
         let stops = self.stops();
         let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
         let pos = t * (stops.len() - 1) as f64;

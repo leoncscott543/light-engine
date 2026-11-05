@@ -13,7 +13,9 @@
                 "--bin",
                 "light-dev",
                 "--",
-                "--session"
+                "--session",
+                "--fps",
+                "60"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

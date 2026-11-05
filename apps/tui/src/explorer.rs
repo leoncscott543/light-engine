@@ -75,6 +75,7 @@ pub enum ExplorerAction {
 }
 
 pub struct Explorer {
+    pub table_viewport: crate::widgets::Viewport,
     /// Editor text; mirrors `query` whenever not editing.
     pub input: String,
     /// Cursor position in chars.
@@ -96,6 +97,7 @@ pub struct Explorer {
     pub zoom: bool,
 
     pub frame: Option<ParticleFrame>,
+    pub loading: bool,
     pub selected: usize,
     /// Particle id of the selection, kept across refreshes.
     selected_id: Option<u64>,
@@ -110,6 +112,7 @@ impl Default for Explorer {
     fn default() -> Self {
         let query = ParticleQuery::default();
         Self {
+            table_viewport: Default::default(),
             input: query.to_string(),
             cursor: 0,
             editing: false,
@@ -121,11 +124,12 @@ impl Default for Explorer {
             heat_y: ParticleField::Y,
             heat_mode: HeatMode::Mean,
             heat_field: ParticleField::Activity,
-            colormap: Colormap::Turbo,
+            colormap: Colormap::Theme,
             log_scale: false,
             live: true,
             zoom: false,
             frame: None,
+            loading: false,
             selected: 0,
             selected_id: None,
             viewport: Cell::new(None),
@@ -176,6 +180,7 @@ impl Explorer {
 
     /// Records a failed fetch; returns whether this is a new failure worth reporting.
     pub fn fail(&mut self, now: std::time::Instant) -> bool {
+        self.loading = false;
         let fresh = self.frame.take().is_some() || self.dirty;
         self.dirty = false;
         self.requested_viewport = self.viewport.get();
@@ -184,6 +189,7 @@ impl Explorer {
     }
 
     pub fn accept(&mut self, frame: ParticleFrame, now: std::time::Instant) {
+        self.loading = false;
         self.dirty = false;
         self.requested_viewport = self.viewport.get();
         self.last_run = Some(now);
@@ -201,6 +207,7 @@ impl Explorer {
 
     pub fn clear(&mut self) {
         self.frame = None;
+        self.loading = false;
         self.dirty = true;
     }
 

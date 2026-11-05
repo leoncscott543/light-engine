@@ -48,7 +48,8 @@ pub enum BackendEvent {
 ///
 /// The model is poll-based: commands are applied immediately, and
 /// [`SimClient::poll`] advances the backend and drains pending events.
-/// Front ends call `poll` once per frame.
+/// This execution interface may perform expensive work. Interactive front ends
+/// use [`crate::SimConnection`] instead; a worker owns and drives this client.
 pub trait SimClient: Send {
     fn info(&self) -> BackendInfo;
 

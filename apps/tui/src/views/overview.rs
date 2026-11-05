@@ -32,7 +32,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         step,
         "Step time",
         &step_us,
-        theme::HONEY,
+        theme::palette().honey,
         |us| fmt::duration(std::time::Duration::from_secs_f64(us * 1e-6)),
         false,
     );
@@ -49,6 +49,22 @@ fn stat_cards(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let status = app.sim.status();
     let none = || Line::styled("—", theme::faint());
     let action = Action::GoTo(Tab::Simulation);
+    let throughput_title = format!(
+        "Throughput · {}",
+        snap.map_or("UNKNOWN".into(), |s| s
+            .meta
+            .field("perf.particles_per_sec")
+            .origin
+            .to_string())
+    );
+    let energy_title = format!(
+        "Energy error · {}",
+        snap.map_or("UNKNOWN".into(), |s| s
+            .meta
+            .field("invariants.energy")
+            .origin
+            .to_string())
+    );
 
     let cards = [
         StatCard {
@@ -74,7 +90,7 @@ fn stat_cards(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             action,
         },
         StatCard {
-            title: "Throughput",
+            title: &throughput_title,
             value: snap.map_or_else(none, |s| {
                 Line::styled(fmt::rate(s.perf.particles_per_sec), theme::value())
             }),
@@ -90,10 +106,12 @@ fn stat_cards(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             action,
         },
         StatCard {
-            title: "Energy error",
+            title: &energy_title,
             value: snap.map_or_else(none, |s| {
-                let e = s.invariants.relative_energy_error();
-                Line::styled(fmt::sci(e), theme::energy_error(e))
+                s.invariants.relative_energy_error_checked().map_or_else(
+                    || Line::styled("undefined", theme::dim()),
+                    |e| Line::styled(fmt::sci(e), theme::energy_error(e)),
+                )
             }),
             detail: snap.map_or_else(none, |s| {
                 Line::styled(
@@ -110,7 +128,13 @@ fn stat_cards(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 }
 
 fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-    let block = panel("Benchmarks", false);
+    let title = format!(
+        "Benchmarks · {} workload",
+        app.bench
+            .selected()
+            .map_or("UNKNOWN".into(), |d| d.meta.provenance.origin.to_string())
+    );
+    let block = panel(&title, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     hits.push(area, Action::GoTo(Tab::Benchmarks));
@@ -166,8 +190,8 @@ fn bench_summary(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             Gauge::default()
                 .gauge_style(
                     ratatui::style::Style::new()
-                        .fg(theme::ACCENT)
-                        .bg(theme::SURFACE),
+                        .fg(theme::palette().accent)
+                        .bg(theme::palette().surface),
                 )
                 .ratio(r.progress())
                 .label(Span::styled(label, theme::value())),
@@ -232,7 +256,7 @@ fn system_panel(app: &App, frame: &mut Frame, area: Rect) {
     let max = tail.iter().copied().fold(f64::MIN_POSITIVE, f64::max);
     frame.render_widget(
         ratatui::widgets::Sparkline::default()
-            .style(ratatui::style::Style::new().fg(theme::BORDER_FOCUS))
+            .style(ratatui::style::Style::new().fg(theme::palette().border_focus))
             .max(1000)
             .data(
                 tail.iter()

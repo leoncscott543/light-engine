@@ -34,6 +34,7 @@ impl fmt::Display for LogLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogEntry {
+    pub provenance: crate::Provenance,
     /// Time since the backend started.
     pub at: Duration,
     pub level: LogLevel,

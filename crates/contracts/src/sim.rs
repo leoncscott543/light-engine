@@ -147,6 +147,18 @@ pub struct Invariants {
 }
 
 impl Invariants {
+    /// Undefined for a zero/nonfinite baseline or a nonfinite result.
+    pub fn relative_energy_error_checked(&self) -> Option<f64> {
+        if !self.initial_energy.is_finite()
+            || self.initial_energy == 0.0
+            || !self.energy.is_finite()
+        {
+            return None;
+        }
+        let value = ((self.energy - self.initial_energy) / self.initial_energy).abs();
+        value.is_finite().then_some(value)
+    }
+
     /// `|H(n) - H(0)| / |H(0)|`, or `0` when `H(0)` is zero.
     pub fn relative_energy_error(&self) -> f64 {
         if self.initial_energy == 0.0 {
@@ -174,6 +186,7 @@ pub struct StepPerf {
 /// Point-in-time view of the simulation session.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimSnapshot {
+    pub meta: crate::ObservationMeta,
     pub config: SimConfig,
     pub status: SimStatus,
     pub tick: u64,
@@ -195,6 +208,14 @@ mod tests {
         };
         assert!((inv.relative_energy_error() - 0.1).abs() < 1e-12);
         assert_eq!(Invariants::default().relative_energy_error(), 0.0);
+        assert_eq!(Invariants::default().relative_energy_error_checked(), None);
+        assert!((inv.relative_energy_error_checked().unwrap() - 0.1).abs() < 1e-12);
+        for energy in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(
+                Invariants { energy, ..inv }.relative_energy_error_checked(),
+                None
+            );
+        }
     }
 
     #[test]

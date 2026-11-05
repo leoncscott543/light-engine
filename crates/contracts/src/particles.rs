@@ -105,6 +105,19 @@ impl ParticleField {
         }
     }
 
+    /// The current particle model uses reduced units; these are not SI claims.
+    pub fn unit(self) -> &'static str {
+        match self {
+            Self::Id | Self::Tile | Self::Lane => "index",
+            Self::X | Self::Y | Self::Z | Self::Radius => "reduced length",
+            Self::Vx | Self::Vy | Self::Vz | Self::Speed => "reduced velocity",
+            Self::Mass => "reduced mass",
+            Self::Kinetic | Self::Potential | Self::Energy => "reduced energy",
+            Self::Lz => "reduced angular momentum",
+            Self::Activity => "1",
+        }
+    }
+
     /// Accepts canonical names and common aliases, case-insensitively.
     pub fn parse(name: &str) -> Option<Self> {
         let lower = name.to_ascii_lowercase();
@@ -137,6 +150,11 @@ impl fmt::Display for ParticleField {
 /// Implementations must present one consistent state for the lifetime of the
 /// borrow so every view computed from it describes the same tick.
 pub trait ParticleSource {
+    /// Evidence for the state being queried. Generic sources default to UNKNOWN.
+    fn metadata(&self) -> crate::ObservationMeta {
+        crate::ObservationMeta::default()
+    }
+
     fn particle_count(&self) -> u64;
 
     fn tick(&self) -> u64;

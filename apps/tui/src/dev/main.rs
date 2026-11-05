@@ -2,12 +2,13 @@
 
 mod watch;
 
+use light_tui::build_status::{self, BuildState};
 use light_tui::reload;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, ExitStatus};
+use std::process::{Child, Command, ExitCode, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -21,8 +22,9 @@ USAGE:
     cargo run --locked -p light_tui --bin light-dev -- [dashboard options]
 
 Watches workspace Rust sources, Cargo manifests/lockfile and build configuration.
-Saves are debounced, then the dashboard gracefully exits, rebuilds and restarts.
-Build errors remain visible; save another edit to retry. Quit the dashboard to
+Saves compile in the background; only successful builds replace the dashboard.
+Failed builds leave the current dashboard running. See its corner build badge
+and target/simtui-dev/build.log for diagnostics. Quit the dashboard to
 stop watching. Dashboard options (e.g. --session --seed 0x1234) are forwarded.
 Changes to the launcher itself require restarting this command.
 ";
@@ -58,7 +60,10 @@ fn build_command(root: &Path, target: &Path) -> Command {
 
 fn dashboard_command(binary: &Path, args: &[OsString], signal: &Path) -> Command {
     let mut command = Command::new(binary);
-    command.args(args).env(reload::SIGNAL_ENV, signal);
+    command
+        .args(args)
+        .env(reload::SIGNAL_ENV, signal)
+        .env(build_status::STATUS_ENV, signal.with_extension("status"));
     command
 }
 
@@ -66,6 +71,9 @@ struct Session {
     child: Option<Child>,
     signal: PathBuf,
     stopping_since: Option<Instant>,
+    state: Option<BuildState>,
+    live_binary: Option<PathBuf>,
+    prepared: Option<PathBuf>,
 }
 
 enum ChildEvent {
@@ -81,6 +89,9 @@ impl Session {
             child: None,
             signal,
             stopping_since: None,
+            state: None,
+            live_binary: None,
+            prepared: None,
         };
         session.clear_signal()?;
         Ok(session)
@@ -106,6 +117,24 @@ impl Session {
         self.clear_signal()?;
         self.stopping_since = None;
         self.child = Some(dashboard_command(binary, args, &self.signal).spawn()?);
+        Ok(())
+    }
+
+    fn set_status(&mut self, state: BuildState) {
+        if self.state != Some(state) {
+            match build_status::write_status(&self.signal.with_extension("status"), state) {
+                Ok(()) => self.state = Some(state),
+                Err(error) => eprintln!("light-dev: cannot publish build status: {error}"),
+            }
+        }
+    }
+
+    fn launch_prepared(&mut self, binary: &Path, args: &[OsString]) -> io::Result<()> {
+        if let Some(previous) = self.live_binary.take() {
+            fs::remove_file(previous)?;
+        }
+        self.launch(binary, args)?;
+        self.live_binary = Some(binary.to_path_buf());
         Ok(())
     }
 
@@ -166,58 +195,220 @@ impl Drop for Session {
         if let Err(error) = self.clear_signal() {
             eprintln!("light-dev: cannot remove reload signal: {error}");
         }
+        for path in [
+            Some(self.signal.with_extension("status")),
+            Some(self.signal.with_extension("tmp")),
+            self.live_binary.take(),
+            self.prepared.take(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Err(error) = fs::remove_file(path)
+                && error.kind() != io::ErrorKind::NotFound
+            {
+                eprintln!("light-dev: cannot remove development file: {error}");
+            }
+        }
     }
 }
 
-fn supervise(root: &Path, args: &[OsString]) -> io::Result<ExitCode> {
-    // A separate target directory also permits rebuilding the launcher on Windows.
-    let target = root.join("target").join("simtui-dev");
-    let binary = target
-        .join("debug")
-        .join(format!("light{}", std::env::consts::EXE_SUFFIX));
-    let mut session = Session::new(&target)?;
-    let mut watcher = watch::Watcher::new(root.to_path_buf())?;
-    let mut build = true;
-    loop {
-        if build {
-            eprintln!("light-dev: building dashboard...");
-            let status = build_command(root, &target).status()?;
-            watcher.poll(Instant::now())?;
-            match after_build(status.success(), watcher.pending()) {
-                BuildOutcome::Launch => session.launch(&binary, args)?,
-                BuildOutcome::Wait if !status.success() => {
-                    eprintln!("light-dev: build failed; watching for the next edit...");
+struct BuildJob {
+    child: Child,
+    obsolete: bool,
+}
+
+impl Drop for BuildJob {
+    fn drop(&mut self) {
+        match self.child.try_wait() {
+            Ok(Some(_)) => {}
+            result => {
+                if let Err(error) = result {
+                    eprintln!("light-dev: cannot check compiler exit: {error}");
                 }
-                BuildOutcome::Wait => {
-                    eprintln!(
-                        "light-dev: files changed during build; waiting for saves to settle..."
-                    );
+                if let Err(error) = self.child.kill() {
+                    eprintln!("light-dev: cannot stop compiler: {error}");
+                }
+                if let Err(error) = self.child.wait() {
+                    eprintln!("light-dev: cannot reap compiler: {error}");
                 }
             }
-            build = false;
+        }
+    }
+}
+
+fn compile(root: &Path, target: &Path, log: &Path) -> io::Result<Child> {
+    let output = fs::File::create(log)?;
+    build_command(root, target)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(output.try_clone()?))
+        .stderr(Stdio::from(output))
+        .spawn()
+}
+
+fn supervise(root: &Path, args: &[OsString]) -> io::Result<ExitCode> {
+    // Cargo never writes a loaded executable, including on Windows.
+    let target = root.join("target").join("simtui-dev");
+    let staging = target.join("build");
+    let binary = target
+        .join("build")
+        .join("debug")
+        .join(format!("light{}", std::env::consts::EXE_SUFFIX));
+    supervise_with(root, args, &binary, || {
+        compile(root, &staging, &target.join("build.log"))
+    })
+}
+
+fn supervise_with(
+    root: &Path,
+    args: &[OsString],
+    binary: &Path,
+    mut compile: impl FnMut() -> io::Result<Child>,
+) -> io::Result<ExitCode> {
+    let target = root.join("target").join("simtui-dev");
+    let mut session = Session::new(&target)?;
+    let mut watcher = watch::Watcher::new(root.to_path_buf())?;
+    let mut needs_build = true;
+    let mut building: Option<BuildJob> = None;
+    let mut generation = 0;
+    loop {
+        let changed = watcher.poll(Instant::now())?;
+        if changed || watcher.pending() {
+            needs_build = true;
+            if let Some(job) = &mut building {
+                job.obsolete = true;
+            }
+            // Once shutdown is requested, the verified replacement is committed.
+            // New edits schedule the next build but must not remove that lifeline.
+            session.set_status(BuildState::Pending);
         }
 
         if let Some(event) = session.poll(Instant::now())? {
             match event {
                 ChildEvent::Reload => {
-                    build = true;
-                    continue;
+                    session.stopping_since = None;
+                    if let Some(path) = session.prepared.take() {
+                        session.launch_prepared(&path, args)?;
+                    }
                 }
                 ChildEvent::Quit(status) => return Ok(child_exit(status)),
             }
         }
 
-        if watcher.poll(Instant::now())? {
-            if session.child.is_some() {
-                session.request_reload()?;
-            } else {
-                build = true;
+        if let Some(job) = &mut building
+            && let Some(status) = job.child.try_wait()?
+        {
+            let obsolete = job.obsolete || watcher.pending();
+            building = None;
+            match after_build(status.success(), obsolete) {
+                BuildOutcome::Launch => {
+                    let path = target.join(format!(
+                        "light-live-{}-{}{}",
+                        std::process::id(),
+                        generation,
+                        std::env::consts::EXE_SUFFIX
+                    ));
+                    generation += 1;
+                    match fs::copy(binary, &path) {
+                        Ok(_) => {
+                            session.set_status(BuildState::Success);
+                            if session.child.is_some() {
+                                session.prepared = Some(path);
+                                if let Err(error) = session.request_reload() {
+                                    if let Some(path) = session.prepared.take()
+                                        && let Err(cleanup_error) = fs::remove_file(path)
+                                    {
+                                        eprintln!(
+                                            "light-dev: cannot remove unused replacement: {cleanup_error}"
+                                        );
+                                    }
+                                    record_failure(
+                                        &mut session,
+                                        &target,
+                                        &format!("cannot request reload: {error}"),
+                                    );
+                                }
+                            } else {
+                                session.launch_prepared(&path, args)?;
+                            }
+                        }
+                        Err(error) => {
+                            record_failure(
+                                &mut session,
+                                &target,
+                                &format!("cannot stage dashboard: {error}"),
+                            );
+                        }
+                    }
+                }
+                BuildOutcome::Wait if obsolete => {
+                    needs_build = true;
+                    session.set_status(BuildState::Pending);
+                }
+                BuildOutcome::Wait => {
+                    record_failure(&mut session, &target, "compilation failed");
+                }
+            }
+        }
+
+        if needs_build
+            && !watcher.pending()
+            && building.is_none()
+            && session.prepared.is_none()
+            && session.stopping_since.is_none()
+        {
+            needs_build = false;
+            session.set_status(BuildState::Compiling);
+            if session.child.is_none() {
+                eprintln!(
+                    "light-dev: building dashboard; diagnostics: {}",
+                    target.join("build.log").display()
+                );
+            }
+            match compile() {
+                Ok(child) => {
+                    building = Some(BuildJob {
+                        child,
+                        obsolete: false,
+                    })
+                }
+                Err(error) => {
+                    record_failure(
+                        &mut session,
+                        &target,
+                        &format!("cannot start compiler: {error}"),
+                    );
+                }
             }
         }
         thread::sleep(POLL);
     }
 }
 
+fn record_failure(session: &mut Session, target: &Path, reason: &str) {
+    use std::io::Write;
+
+    let result = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(target.join("build.log"))
+        .and_then(|mut log| {
+            writeln!(
+                log,
+                "\nlight-dev: {reason}; keeping the current dashboard (if running)"
+            )
+        });
+    if let Err(error) = result {
+        eprintln!("light-dev: {reason}; cannot write build log: {error}");
+    }
+    session.set_status(BuildState::Failed);
+    if session.child.is_none() {
+        eprintln!(
+            "light-dev: {reason}; save to retry. See {}",
+            target.join("build.log").display()
+        );
+    }
+}
 fn child_exit(status: ExitStatus) -> ExitCode {
     if status.success() {
         ExitCode::SUCCESS
@@ -327,10 +518,16 @@ mod tests {
         assert_eq!(command.get_args().collect::<Vec<_>>(), args);
         assert_eq!(
             command.get_envs().collect::<Vec<_>>(),
-            vec![(
-                std::ffi::OsStr::new(reload::SIGNAL_ENV),
-                Some(std::ffi::OsStr::new("reload"))
-            )]
+            vec![
+                (
+                    std::ffi::OsStr::new(build_status::STATUS_ENV),
+                    Some(std::ffi::OsStr::new("reload.status"))
+                ),
+                (
+                    std::ffi::OsStr::new(reload::SIGNAL_ENV),
+                    Some(std::ffi::OsStr::new("reload"))
+                ),
+            ]
         );
     }
 
@@ -415,6 +612,420 @@ mod tests {
         );
         assert!(session.child.is_none());
         finish(session);
+    }
+
+    #[test]
+    fn broken_status_and_log_files_cannot_stop_the_running_dashboard() {
+        let mut session = session();
+        session
+            .launch(
+                &std::env::current_exe().unwrap(),
+                &[
+                    "--exact".into(),
+                    "tests::dashboard_child".into(),
+                    "--ignored".into(),
+                ],
+            )
+            .unwrap();
+        let status = session.signal.with_extension("status");
+        fs::create_dir(&status).unwrap();
+        let missing_log_directory = session.signal.parent().unwrap().join("missing");
+        record_failure(&mut session, &missing_log_directory, "test build failed");
+        assert!(
+            session
+                .child
+                .as_mut()
+                .unwrap()
+                .try_wait()
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            !session.signal.exists(),
+            "reporting errors must not request reload"
+        );
+        fs::remove_dir(status).unwrap();
+        session.request_reload().unwrap();
+        assert!(matches!(wait_for_exit(&mut session), ChildEvent::Reload));
+        let temporary = session.signal.with_extension("tmp");
+        if temporary.exists() {
+            fs::remove_file(temporary).unwrap();
+        }
+        finish(session);
+    }
+
+    #[test]
+    fn unresponsive_child_reports_timeout_and_cleanup_stops_it() {
+        let mut session = session();
+        let directory = session.signal.parent().unwrap().to_path_buf();
+        session
+            .launch(
+                &std::env::current_exe().unwrap(),
+                &[
+                    "--exact".into(),
+                    "tests::dashboard_child".into(),
+                    "--ignored".into(),
+                ],
+            )
+            .unwrap();
+        let now = Instant::now();
+        session.stopping_since = Some(now);
+        assert_eq!(
+            session.poll(now + STOP_TIMEOUT).err().unwrap().kind(),
+            io::ErrorKind::TimedOut
+        );
+        drop(session);
+        assert!(fs::read_dir(&directory).unwrap().next().is_none());
+        fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn supervisor_keeps_the_same_dashboard_alive_on_failed_build_and_reloads_only_success() {
+        failure_scenario(Failure::Compiler);
+    }
+
+    #[test]
+    fn compiler_spawn_failure_leaves_the_current_dashboard_alive() {
+        failure_scenario(Failure::Spawn);
+    }
+
+    #[test]
+    fn missing_build_artifact_leaves_the_current_dashboard_alive() {
+        failure_scenario(Failure::Artifact);
+    }
+
+    enum Failure {
+        Compiler,
+        Spawn,
+        Artifact,
+    }
+
+    fn failure_scenario(failure: Failure) {
+        let session = session();
+        let root = session.signal.parent().unwrap().to_path_buf();
+        drop(session);
+        fs::create_dir(root.join("src")).unwrap();
+        let source = root.join("src").join("lib.rs");
+        fs::write(&source, b"initial").unwrap();
+        let target = root.join("target").join("simtui-dev");
+        let ready = target.join("ready");
+        let done = target.join("done");
+        let writer_ready = ready.clone();
+        let status = target.join(format!("reload-{}.status", std::process::id()));
+        let signal = target.join(format!("reload-{}", std::process::id()));
+        let heartbeat = target.join("heartbeat");
+        let writer = thread::spawn(move || {
+            wait_until(|| writer_ready.is_file());
+            let first_pid = fs::read(&writer_ready).unwrap();
+            fs::write(&source, b"invalid build").unwrap();
+            wait_until(|| fs::read_to_string(&status).is_ok_and(|state| state == "failed"));
+            assert!(!signal.exists(), "failed build must not request shutdown");
+            assert_eq!(fs::read(&writer_ready).unwrap(), first_pid);
+            let before = fs::read(&heartbeat).unwrap_or_default();
+            wait_until(|| fs::read(&heartbeat).is_ok_and(|after| after != before));
+            assert_eq!(
+                fs::read(&writer_ready).unwrap(),
+                first_pid,
+                "old UI must still be running"
+            );
+            fs::write(&source, b"fixed build").unwrap();
+        });
+        let binary = root.join(format!("staged{}", std::env::consts::EXE_SUFFIX));
+        fs::copy(std::env::current_exe().unwrap(), &binary).unwrap();
+        let mut builds = 0;
+        let result = supervise_with(
+            &root,
+            &[
+                "--exact".into(),
+                "tests::dashboard_cycle_child".into(),
+                "--ignored".into(),
+            ],
+            &binary,
+            || {
+                builds += 1;
+                match builds {
+                    1 => test_compile(true),
+                    2 => match failure {
+                        Failure::Compiler => test_compile(false),
+                        Failure::Spawn => Err(io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "test compiler missing",
+                        )),
+                        Failure::Artifact => {
+                            fs::remove_file(&binary)?;
+                            test_compile(true)
+                        }
+                    },
+                    3 => {
+                        fs::copy(std::env::current_exe()?, &binary)?;
+                        fs::write(&done, b"done")?;
+                        test_compile(true)
+                    }
+                    _ => panic!("supervisor rebuilt without another source change"),
+                }
+            },
+        );
+        writer.join().unwrap();
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        assert_eq!(builds, 3);
+        assert!(
+            !target
+                .join(format!("reload-{}", std::process::id()))
+                .exists()
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn wait_until(condition: impl Fn() -> bool) {
+        let deadline = Instant::now() + STOP_TIMEOUT;
+        while !condition() {
+            assert!(Instant::now() < deadline, "supervisor did not progress");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn test_compile(success: bool) -> io::Result<Child> {
+        Command::new(std::env::current_exe()?)
+            .arg(if success {
+                "--list"
+            } else {
+                "--invalid-test-argument"
+            })
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+    }
+
+    fn workspace() -> (PathBuf, PathBuf) {
+        let session = session();
+        let root = session.signal.parent().unwrap().to_path_buf();
+        drop(session);
+        fs::create_dir(root.join("src")).unwrap();
+        fs::write(root.join("src").join("lib.rs"), b"initial").unwrap();
+        let target = root.join("target").join("simtui-dev");
+        (root, target)
+    }
+
+    fn cycle_args() -> Vec<OsString> {
+        vec![
+            "--exact".into(),
+            "tests::dashboard_cycle_child".into(),
+            "--ignored".into(),
+        ]
+    }
+
+    fn gated_compile(target: &Path) -> io::Result<Child> {
+        Command::new(std::env::current_exe()?)
+            .args(["--exact", "tests::compiler_child", "--ignored"])
+            .env("LIGHT_DEV_TEST_COMPILER_DIRECTORY", target)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .spawn()
+    }
+
+    #[test]
+    fn failed_initial_build_waits_for_edits_and_recovers() {
+        let (root, target) = workspace();
+        let status = target.join(format!("reload-{}.status", std::process::id()));
+        let source = root.join("src").join("lib.rs");
+        let writer = thread::spawn(move || {
+            wait_until(|| fs::read_to_string(&status).is_ok_and(|state| state == "failed"));
+            fs::write(source, b"fixed").unwrap();
+        });
+        let mut builds = 0;
+        let result = supervise_with(
+            &root,
+            &cycle_args(),
+            &std::env::current_exe().unwrap(),
+            || {
+                builds += 1;
+                match builds {
+                    1 => test_compile(false),
+                    2 => {
+                        fs::write(target.join("done"), b"done")?;
+                        test_compile(true)
+                    }
+                    _ => panic!("unexpected extra build"),
+                }
+            },
+        );
+        writer.join().unwrap();
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        assert_eq!(builds, 2);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn source_edits_during_compilation_do_not_replace_dashboard_with_stale_build() {
+        let (root, target) = workspace();
+        let source = root.join("src").join("lib.rs");
+        let writer_target = target.clone();
+        let writer = thread::spawn(move || {
+            let ready = writer_target.join("ready");
+            wait_until(|| ready.is_file());
+            fs::write(&source, b"edit one").unwrap();
+            wait_until(|| writer_target.join("compiler-started").is_file());
+            let pid = fs::read(&ready).unwrap();
+            fs::write(&source, b"edit two").unwrap();
+            let status = writer_target.join(format!("reload-{}.status", std::process::id()));
+            wait_until(|| fs::read_to_string(&status).is_ok_and(|state| state == "pending"));
+            assert_eq!(fs::read(&ready).unwrap(), pid);
+            fs::write(writer_target.join("compiler-release"), b"go").unwrap();
+        });
+        let mut builds = 0;
+        let mut first_pid = Vec::new();
+        let result = supervise_with(
+            &root,
+            &cycle_args(),
+            &std::env::current_exe().unwrap(),
+            || {
+                builds += 1;
+                match builds {
+                    1 => test_compile(true),
+                    2 => {
+                        first_pid = fs::read(target.join("ready"))?;
+                        gated_compile(&target)
+                    }
+                    3 => {
+                        assert_eq!(fs::read(target.join("ready"))?, first_pid);
+                        assert!(
+                            !target
+                                .join(format!("reload-{}", std::process::id()))
+                                .exists()
+                        );
+                        fs::write(target.join("done"), b"done")?;
+                        test_compile(true)
+                    }
+                    _ => panic!("unexpected extra build"),
+                }
+            },
+        );
+        writer.join().unwrap();
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        assert_eq!(builds, 3);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn quitting_dashboard_while_compiling_stops_supervisor_promptly() {
+        let (root, target) = workspace();
+        let source = root.join("src").join("lib.rs");
+        let writer_target = target.clone();
+        let writer = thread::spawn(move || {
+            wait_until(|| writer_target.join("ready").is_file());
+            fs::write(source, b"rebuild").unwrap();
+            wait_until(|| writer_target.join("compiler-started").is_file());
+            fs::write(writer_target.join("quit"), b"quit").unwrap();
+        });
+        let mut builds = 0;
+        let started = Instant::now();
+        let result = supervise_with(
+            &root,
+            &cycle_args(),
+            &std::env::current_exe().unwrap(),
+            || {
+                builds += 1;
+                match builds {
+                    1 => test_compile(true),
+                    2 => gated_compile(&target),
+                    _ => panic!("unexpected extra build"),
+                }
+            },
+        );
+        writer.join().unwrap();
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        assert!(
+            started.elapsed() < STOP_TIMEOUT,
+            "quit must not wait for compilation"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn edits_during_handoff_preserve_the_committed_successful_replacement() {
+        let (root, target) = workspace();
+        let source = root.join("src").join("lib.rs");
+        let writer_target = target.clone();
+        let writer = thread::spawn(move || {
+            let ready = writer_target.join("ready");
+            wait_until(|| ready.is_file());
+            let first = fs::read(&ready).unwrap();
+            fs::write(writer_target.join("delay-exit"), b"wait").unwrap();
+            fs::write(&source, b"successful replacement").unwrap();
+            wait_until(|| writer_target.join("exiting").is_file());
+            fs::write(&source, b"broken next edit").unwrap();
+            let status = writer_target.join(format!("reload-{}.status", std::process::id()));
+            wait_until(|| fs::read_to_string(&status).is_ok_and(|state| state == "pending"));
+            fs::write(writer_target.join("allow-exit"), b"go").unwrap();
+            wait_until(|| fs::read(&ready).is_ok_and(|pid| !pid.is_empty() && pid != first));
+            wait_until(|| fs::read_to_string(&status).is_ok_and(|state| state == "failed"));
+            assert!(
+                !writer_target
+                    .join(format!("reload-{}", std::process::id()))
+                    .exists()
+            );
+            let before = fs::read(writer_target.join("heartbeat")).unwrap();
+            wait_until(|| {
+                fs::read(writer_target.join("heartbeat")).is_ok_and(|after| after != before)
+            });
+            fs::write(writer_target.join("quit"), b"quit").unwrap();
+        });
+        let mut builds = 0;
+        let result = supervise_with(
+            &root,
+            &cycle_args(),
+            &std::env::current_exe().unwrap(),
+            || {
+                builds += 1;
+                match builds {
+                    1 | 2 => test_compile(true),
+                    3 => test_compile(false),
+                    _ => panic!("unexpected extra build"),
+                }
+            },
+        );
+        writer.join().unwrap();
+        assert_eq!(result.unwrap(), ExitCode::SUCCESS);
+        assert_eq!(builds, 3);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture, launched by compiler lifecycle tests"]
+    fn compiler_child() {
+        let directory =
+            PathBuf::from(std::env::var_os("LIGHT_DEV_TEST_COMPILER_DIRECTORY").unwrap());
+        fs::write(directory.join("compiler-started"), b"started").unwrap();
+        wait_until(|| directory.join("compiler-release").exists());
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture, launched by supervisor tests"]
+    fn dashboard_cycle_child() {
+        let signal = PathBuf::from(std::env::var_os(reload::SIGNAL_ENV).unwrap());
+        let directory = signal.parent().unwrap();
+        if directory.join("done").exists() {
+            return;
+        }
+        fs::write(directory.join("ready"), std::process::id().to_string()).unwrap();
+        let request = reload::Signal::from_env();
+        let deadline = Instant::now() + STOP_TIMEOUT;
+        let mut frames = 0_u64;
+        while !request.requested().unwrap() {
+            if directory.join("quit").exists() {
+                return;
+            }
+            assert!(Instant::now() < deadline, "reload was not requested");
+            frames += 1;
+            fs::write(directory.join("heartbeat"), frames.to_string()).unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+        if directory.join("delay-exit").exists() {
+            fs::write(directory.join("exiting"), std::process::id().to_string()).unwrap();
+            wait_until(|| directory.join("allow-exit").exists());
+        }
     }
 
     #[test]

@@ -23,6 +23,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     session_panel(app, frame, session, hits);
     config_panel(app, frame, config, hits);
 
+    if area.width < 110 {
+        let [inv, perf] =
+            Layout::vertical([Constraint::Length(9), Constraint::Min(0)]).areas(right);
+        invariants_panel(app, frame, inv);
+        perf_panel(app, frame, perf);
+        return;
+    }
+
     let [tables, energy, sparks] = Layout::vertical([
         Constraint::Length(9),
         Constraint::Min(6),
@@ -43,7 +51,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         step,
         "Step time",
         &step_us,
-        theme::HONEY,
+        theme::palette().honey,
         |us| fmt::duration(Duration::from_secs_f64(us * 1e-6)),
         false,
     );
@@ -53,7 +61,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         thru,
         "Throughput",
         &throughput,
-        theme::GOLD,
+        theme::palette().gold,
         fmt::rate,
         false,
     );
@@ -148,7 +156,9 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let row_style = if selected {
             theme::selected()
         } else if hovered(app.mouse, row) {
-            Style::new().bg(theme::HOVER).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().hover)
+                .fg(theme::palette().text)
         } else {
             theme::base()
         };
@@ -164,8 +174,8 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let label = format!("{marker} {:<12}", field.label());
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(label, row_style.fg(theme::TEXT_DIM)),
-                Span::styled(format!("{live:<5}"), row_style.fg(theme::OK)),
+                Span::styled(label, row_style.fg(theme::palette().text_dim)),
+                Span::styled(format!("{live:<5}"), row_style.fg(theme::palette().ok)),
             ])),
             row,
         );
@@ -181,9 +191,11 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let inc = Rect::new(x + 2 + value_w, y, 2, 1);
         let arrow = |r: Rect| {
             if hovered(app.mouse, r) {
-                row_style.fg(theme::BORDER_FOCUS).bg(theme::ACCENT)
+                row_style
+                    .fg(theme::palette().border_focus)
+                    .bg(theme::palette().accent)
             } else {
-                row_style.fg(theme::GOLD)
+                row_style.fg(theme::palette().gold)
             }
         };
         frame.render_widget(Paragraph::new(Span::styled(" ◂", arrow(dec))), dec);
@@ -205,7 +217,7 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let hint = if !pending.is_empty() {
             Line::styled(
                 "• changed — Recreate (R) to apply",
-                Style::new().fg(theme::WARN),
+                Style::new().fg(theme::palette().warn),
             )
         } else if app.has_session() {
             Line::styled("dt is live · others need R", theme::faint())
@@ -220,7 +232,14 @@ fn config_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 }
 
 fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let block = panel("Invariants", false);
+    let title = format!(
+        "Invariants · {}",
+        app.sim
+            .snapshot
+            .as_ref()
+            .map_or("UNKNOWN", |s| s.meta.label())
+    );
+    let block = panel(&title, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let Some(s) = &app.sim.snapshot else {
@@ -228,7 +247,7 @@ fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
         return;
     };
     let inv = &s.invariants;
-    let rel = inv.relative_energy_error();
+    let rel = inv.relative_energy_error_checked();
     let l = inv.angular_momentum;
     let w = 14;
     let lines = vec![
@@ -244,7 +263,10 @@ fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
         ),
         widgets::kv(
             "|ΔH|/|H₀|",
-            Span::styled(fmt::sci(rel), theme::energy_error(rel)),
+            rel.map_or_else(
+                || Span::styled("undefined", theme::dim()),
+                |e| Span::styled(fmt::sci(e), theme::energy_error(e)),
+            ),
             w,
         ),
         widgets::kv(
@@ -253,9 +275,12 @@ fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
             w,
         ),
         widgets::kv(
-            "L",
+            "|L|",
             Span::styled(
-                format!("[{:.3}, {:.3}, {:.3}]", l[0], l[1], l[2]),
+                fmt::sci(
+                    l.iter()
+                        .fold(0.0_f64, |norm, component| norm.hypot(*component)),
+                ),
                 theme::value(),
             ),
             w,
@@ -282,7 +307,14 @@ fn invariants_panel(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn perf_panel(app: &App, frame: &mut Frame, area: Rect) {
-    let block = panel("Performance", false);
+    let title = format!(
+        "Performance · {}",
+        app.sim
+            .snapshot
+            .as_ref()
+            .map_or("UNKNOWN", |s| s.meta.label())
+    );
+    let block = panel(&title, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let Some(s) = &app.sim.snapshot else {
@@ -332,8 +364,16 @@ fn perf_panel(app: &App, frame: &mut Frame, area: Rect) {
     );
     frame.render_widget(
         Gauge::default()
-            .gauge_style(Style::new().fg(theme::ACCENT).bg(theme::SURFACE))
-            .ratio(p.lane_utilization.clamp(0.0, 1.0))
+            .gauge_style(
+                Style::new()
+                    .fg(theme::palette().accent)
+                    .bg(theme::palette().surface),
+            )
+            .ratio(if p.lane_utilization.is_finite() {
+                p.lane_utilization.clamp(0.0, 1.0)
+            } else {
+                0.0
+            })
             .label(Span::styled(
                 format!("{:.1}%", p.lane_utilization * 100.0),
                 theme::value(),

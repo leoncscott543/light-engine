@@ -3,9 +3,9 @@ use std::fmt::Display;
 use std::time::{Duration, Instant};
 
 use light_contracts::{
-    BackendEvent, BackendInfo, BenchClient, BenchDescriptor, BenchEvent, BenchId, BenchRunConfig,
-    BenchStats, Integrator, Layout, LogEntry, LogLevel, ProcessId, ProcessInfo, Series, SimClient,
-    SimCommand, SimConfig, SimSnapshot, SimStatus,
+    BackendEvent, BackendInfo, BackendKind, BenchClient, BenchDescriptor, BenchEvent, BenchId,
+    BenchRunConfig, BenchStats, Integrator, Layout, LogEntry, LogLevel, ParticleRequest, ProcessId,
+    ProcessInfo, Series, SimCommand, SimConfig, SimConnection, SimSnapshot, SimStatus, SimUpdate,
 };
 
 use crate::action::Action;
@@ -25,16 +25,18 @@ pub enum Tab {
     Benchmarks,
     Processes,
     Logs,
+    Telemetry,
 }
 
 impl Tab {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Overview,
         Self::Simulation,
         Self::Particles,
         Self::Benchmarks,
         Self::Processes,
         Self::Logs,
+        Self::Telemetry,
     ];
 
     pub fn title(self) -> &'static str {
@@ -45,6 +47,7 @@ impl Tab {
             Self::Benchmarks => "Benchmarks",
             Self::Processes => "Processes",
             Self::Logs => "Logs",
+            Self::Telemetry => "Telemetry",
         }
     }
 
@@ -192,11 +195,14 @@ impl SimView {
 
     fn record(&mut self, snapshot: &SimSnapshot) {
         let tick = snapshot.tick as f64;
-        self.energy
-            .push((tick, snapshot.invariants.relative_energy_error()));
+        if let Some(error) = snapshot.invariants.relative_energy_error_checked() {
+            self.energy.push((tick, error));
+        }
         self.step_us
             .push(snapshot.perf.step_time.as_secs_f64() * 1e6);
-        self.throughput.push(snapshot.perf.particles_per_sec);
+        if snapshot.perf.particles_per_sec.is_finite() && snapshot.perf.particles_per_sec >= 0.0 {
+            self.throughput.push(snapshot.perf.particles_per_sec);
+        }
     }
 
     fn clear_history(&mut self) {
@@ -215,6 +221,7 @@ pub enum RunState {
 }
 
 pub struct BenchRecord {
+    pub meta: light_contracts::ObservationMeta,
     pub config: BenchRunConfig,
     pub state: RunState,
     pub samples: Vec<Duration>,
@@ -232,6 +239,7 @@ impl BenchRecord {
 }
 
 pub struct BenchView {
+    pub viewport: crate::widgets::Viewport,
     pub list: Vec<BenchDescriptor>,
     pub selected: usize,
     pub config: BenchRunConfig,
@@ -247,10 +255,11 @@ impl BenchView {
 
     fn apply(&mut self, event: BenchEvent) {
         match event {
-            BenchEvent::Started { id, config } => {
+            BenchEvent::Started { id, config, meta } => {
                 self.records.insert(
                     id,
                     BenchRecord {
+                        meta,
                         config,
                         state: RunState::Running,
                         samples: Vec::with_capacity(config.samples as usize),
@@ -286,13 +295,15 @@ impl BenchView {
 }
 
 pub struct ProcessView {
+    pub viewport: crate::widgets::Viewport,
     pub list: Vec<ProcessInfo>,
     pub selected: usize,
-    pub cpu_history: HashMap<ProcessId, Series<f64>>,
+    pub cpu_history: HashMap<(String, ProcessId), Series<f64>>,
     last_refresh: Option<Instant>,
 }
 
 pub struct LogView {
+    pub height: std::cell::Cell<usize>,
     pub entries: VecDeque<LogEntry>,
     pub min_level: LogLevel,
     pub follow: bool,
@@ -313,14 +324,80 @@ impl LogView {
             self.scroll += 1;
         }
         self.entries.push_back(entry);
+        if !self.follow {
+            self.scroll = self
+                .scroll
+                .min(self.visible().count().saturating_sub(self.height.get()));
+        }
     }
 }
 
 /// The TUI's own frame timing, so the dashboard monitors itself too.
 pub struct UiStats {
+    pub target_fps: u32,
+    pub over_budget: u64,
     pub render_ms: Series<f64>,
     pub frame_interval_ms: Series<f64>,
     last_frame: Option<Instant>,
+}
+
+/// Receipt timing uses the local monotonic clock, never unsynchronized UTC.
+pub struct FeedStats {
+    pub received: u64,
+    pub intervals_ms: Series<f64>,
+    pub last_received: Option<Instant>,
+    last_sample: Option<Instant>,
+}
+
+impl Default for FeedStats {
+    fn default() -> Self {
+        Self {
+            received: 0,
+            intervals_ms: Series::new(120),
+            last_received: None,
+            last_sample: None,
+        }
+    }
+}
+
+impl FeedStats {
+    fn receive(&mut self, now: Instant) {
+        if let Some(last) = self.last_sample.replace(now) {
+            let interval = now.duration_since(last).as_secs_f64() * 1e3;
+            if interval > 0.0 {
+                self.intervals_ms.push(interval);
+            }
+        }
+        self.observe(now);
+    }
+
+    fn observe(&mut self, now: Instant) {
+        self.last_received = Some(now);
+        self.received += 1;
+    }
+
+    pub fn hz(&self) -> f64 {
+        if self
+            .last_sample
+            .is_none_or(|last| last.elapsed() > Duration::from_secs(3))
+        {
+            return 0.0;
+        }
+        self.intervals_ms
+            .mean()
+            .filter(|ms| *ms > 0.0)
+            .map_or(0.0, |ms| 1e3 / ms)
+    }
+}
+
+pub fn p95(series: &Series<f64>) -> f64 {
+    let mut values: Vec<_> = series.iter().filter(|v| v.is_finite()).collect();
+    values.sort_by(f64::total_cmp);
+    if values.is_empty() {
+        0.0
+    } else {
+        values[((values.len() as f64 * 0.95).ceil() as usize).saturating_sub(1)]
+    }
 }
 
 impl UiStats {
@@ -339,7 +416,18 @@ pub struct Toast {
 }
 
 pub struct App {
-    sim_client: Box<dyn SimClient>,
+    pub inspector: crate::inspection::Inspector,
+    pub theme: crate::theme::Theme,
+    pub snapshot_feed: FeedStats,
+    pub particle_feed: FeedStats,
+    pub query_response_ms: Series<f64>,
+    pub command_response_ms: Series<f64>,
+    pub discarded_particle_frames: u64,
+    pub delivery: Option<light_contracts::DeliveryStats>,
+    pub connection_error: Option<String>,
+    pub telemetry_scroll: usize,
+    pub telemetry_height: std::cell::Cell<usize>,
+    sim_client: Box<dyn SimConnection>,
     bench_client: Box<dyn BenchClient>,
     pub backend: BackendInfo,
     pub bench_backend: BackendInfo,
@@ -354,20 +442,39 @@ pub struct App {
     pub logs: LogView,
     pub ui: UiStats,
     pub toast: Option<Toast>,
+    pub build_state: light_tui::build_status::BuildState,
+    build_monitor: Option<light_tui::build_status::BuildMonitor>,
     started: Instant,
+    sim_ready: bool,
+    sim_processes: Vec<ProcessInfo>,
+    particle_request: Option<(u64, ParticleRequest, u64, Instant)>,
+    command_submitted: Option<Instant>,
+    session_epoch: u64,
+    pending_commands: usize,
 }
 
 impl App {
-    pub fn new(sim_client: Box<dyn SimClient>, bench_client: Box<dyn BenchClient>) -> Self {
-        let backend = sim_client.info();
+    pub fn new(sim_client: Box<dyn SimConnection>, bench_client: Box<dyn BenchClient>) -> Self {
+        let backend = BackendInfo {
+            name: "connecting".into(),
+            version: String::new(),
+            kind: BackendKind::Local,
+        };
         let bench_backend = bench_client.info();
-        let snapshot = sim_client.snapshot();
-        let draft = snapshot
-            .as_ref()
-            .map_or_else(SimConfig::default, |s| s.config);
         let benches = bench_client.benches();
         let active = bench_client.active();
         let mut app = Self {
+            inspector: crate::inspection::Inspector::default(),
+            theme: crate::theme::Theme::default(),
+            snapshot_feed: FeedStats::default(),
+            particle_feed: FeedStats::default(),
+            query_response_ms: Series::new(HISTORY),
+            command_response_ms: Series::new(HISTORY),
+            discarded_particle_frames: 0,
+            delivery: None,
+            connection_error: None,
+            telemetry_scroll: 0,
+            telemetry_height: std::cell::Cell::new(PAGE),
             sim_client,
             bench_client,
             backend,
@@ -377,8 +484,8 @@ impl App {
             show_help: false,
             mouse: None,
             sim: SimView {
-                snapshot,
-                draft,
+                snapshot: None,
+                draft: SimConfig::default(),
                 field: ConfigField::Particles,
                 energy: Series::new(HISTORY),
                 step_us: Series::new(HISTORY),
@@ -386,6 +493,7 @@ impl App {
             },
             explorer: Explorer::default(),
             bench: BenchView {
+                viewport: Default::default(),
                 list: benches,
                 selected: 0,
                 config: BenchRunConfig::default(),
@@ -393,28 +501,38 @@ impl App {
                 records: HashMap::new(),
             },
             procs: ProcessView {
+                viewport: Default::default(),
                 list: Vec::new(),
                 selected: 0,
                 cpu_history: HashMap::new(),
                 last_refresh: None,
             },
             logs: LogView {
+                height: std::cell::Cell::new(PAGE),
                 entries: VecDeque::new(),
                 min_level: LogLevel::Debug,
                 follow: true,
                 scroll: 0,
             },
             ui: UiStats {
+                target_fps: 30,
+                over_budget: 0,
                 render_ms: Series::new(HISTORY),
                 frame_interval_ms: Series::new(60),
                 last_frame: None,
             },
             toast: None,
+            build_state: light_tui::build_status::BuildState::Standalone,
+            build_monitor: None,
             started: Instant::now(),
+            sim_ready: false,
+            sim_processes: Vec::new(),
+            particle_request: None,
+            command_submitted: None,
+            session_epoch: 0,
+            pending_commands: 0,
         };
-        if let Some(s) = app.sim.snapshot.clone() {
-            app.sim.record(&s);
-        }
+        app.pump();
         app.refresh_processes(Instant::now());
         app
     }
@@ -427,8 +545,49 @@ impl App {
         self.sim.snapshot.is_some()
     }
 
+    pub fn snapshot_health(&self) -> &'static str {
+        if self.connection_error.is_some() {
+            return "FAULTED";
+        }
+        let Some(snapshot) = &self.sim.snapshot else {
+            return if self.sim_ready {
+                "NO SESSION"
+            } else {
+                "CONNECTING"
+            };
+        };
+        if snapshot.status != SimStatus::Running {
+            return "HELD";
+        }
+        let threshold = self.delivery.map_or(Duration::from_secs(1), |d| {
+            (d.snapshot_interval * 3).max(Duration::from_secs(1))
+        });
+        if self
+            .snapshot_feed
+            .last_received
+            .is_none_or(|t| t.elapsed() > threshold)
+        {
+            "STALE"
+        } else {
+            "FRESH"
+        }
+    }
+
     /// Pumps both backends once. Call every frame.
     pub fn tick(&mut self) {
+        if let Some(update) = self
+            .build_monitor
+            .as_mut()
+            .and_then(|monitor| monitor.poll())
+        {
+            match update {
+                Ok(state) => self.build_state = state,
+                Err(error) => {
+                    self.build_state = light_tui::build_status::BuildState::Unavailable;
+                    self.notify(LogLevel::Error, error);
+                }
+            }
+        }
         self.pump();
         let now = Instant::now();
         self.refresh_particles(now);
@@ -448,9 +607,17 @@ impl App {
         }
     }
 
+    pub fn monitor_build(&mut self, monitor: light_tui::build_status::BuildMonitor) {
+        self.build_monitor = Some(monitor);
+        self.build_state = light_tui::build_status::BuildState::Pending;
+    }
+
     pub fn record_frame(&mut self, render: Duration) {
         let now = Instant::now();
         self.ui.render_ms.push(render.as_secs_f64() * 1e3);
+        if render.as_secs_f64() > 1.0 / f64::from(self.ui.target_fps) {
+            self.ui.over_budget += 1;
+        }
         if let Some(last) = self.ui.last_frame.replace(now) {
             self.ui
                 .frame_interval_ms
@@ -461,7 +628,7 @@ impl App {
     /// Fetches one particle frame (table, stats, and heatmap from the same
     /// state) while the Particles tab is visible.
     fn refresh_particles(&mut self, now: Instant) {
-        if self.tab != Tab::Particles {
+        if self.tab != Tab::Particles || !self.sim_ready || self.pending_commands != 0 {
             return;
         }
         let Some(tick) = self.sim.snapshot.as_ref().map(|s| s.tick) else {
@@ -471,8 +638,15 @@ impl App {
         if !self.explorer.needs_refresh(tick, now) {
             return;
         }
-        match self.sim_client.particles(&self.explorer.request()) {
-            Ok(frame) => self.explorer.accept(frame, now),
+        if self.particle_request.is_some() {
+            return;
+        }
+        let request = self.explorer.request();
+        match self.sim_client.query_particles(request.clone()) {
+            Ok(id) => {
+                self.particle_request = Some((id, request, self.session_epoch, now));
+                self.explorer.loading = true;
+            }
             Err(err) => {
                 if self.explorer.fail(now) {
                     self.notify(LogLevel::Error, format!("particle query failed: {err}"));
@@ -482,8 +656,82 @@ impl App {
     }
 
     fn pump(&mut self) {
-        for event in self.sim_client.poll() {
-            self.on_backend(event);
+        for update in self.sim_client.poll() {
+            match update {
+                SimUpdate::Telemetry(stats) => self.delivery = Some(stats),
+                SimUpdate::Ready { info, snapshot } => {
+                    self.backend = info;
+                    self.sim_ready = true;
+                    self.connection_error = None;
+                    if let Some(snapshot) = &snapshot {
+                        self.sim.draft = snapshot.config;
+                    }
+                    self.on_backend(BackendEvent::SessionChanged(snapshot));
+                }
+                SimUpdate::Backend(event) => self.on_backend(event),
+                SimUpdate::Processes(processes) => self.sim_processes = processes,
+                SimUpdate::Particles { id, result } => {
+                    if self
+                        .particle_request
+                        .as_ref()
+                        .is_some_and(|(pending, _, _, _)| *pending == id)
+                    {
+                        let (_, request, epoch, submitted) =
+                            self.particle_request.take().expect("matched request");
+                        self.query_response_ms
+                            .push(submitted.elapsed().as_secs_f64() * 1e3);
+                        self.explorer.loading = false;
+                        // Query/viewport edits while work is in flight invalidate
+                        // its result; leave dirty state for the next request.
+                        if request != self.explorer.request()
+                            || !self.has_session()
+                            || epoch != self.session_epoch
+                        {
+                            self.discarded_particle_frames += 1;
+                            continue;
+                        }
+                        let now = Instant::now();
+                        match result {
+                            Ok(frame) => {
+                                self.particle_feed.receive(now);
+                                self.explorer.accept(frame, now);
+                            }
+                            Err(error) => {
+                                if self.explorer.fail(now) {
+                                    self.notify(
+                                        LogLevel::Error,
+                                        format!("particle query failed: {error}"),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                SimUpdate::CommandCompleted(result) => {
+                    self.pending_commands = self.pending_commands.saturating_sub(1);
+                    if self.pending_commands == 0
+                        && let Some(submitted) = self.command_submitted.take()
+                    {
+                        self.command_response_ms
+                            .push(submitted.elapsed().as_secs_f64() * 1e3);
+                    }
+                    if let Err(error) = result {
+                        self.notify(LogLevel::Error, error.to_string());
+                    }
+                }
+                SimUpdate::Faulted(reason) => {
+                    self.connection_error = Some(reason.clone());
+                    self.sim_ready = false;
+                    self.explorer.loading = false;
+                    self.particle_request = None;
+                    self.pending_commands = 0;
+                    self.command_submitted = None;
+                    if let Some(snapshot) = &mut self.sim.snapshot {
+                        snapshot.status = SimStatus::Faulted(reason.clone());
+                    }
+                    self.notify(LogLevel::Error, reason);
+                }
+            }
         }
         for event in self.bench_client.poll() {
             self.on_bench(event);
@@ -494,16 +742,22 @@ impl App {
     fn on_backend(&mut self, event: BackendEvent) {
         match event {
             BackendEvent::Stepped(snapshot) => {
+                self.snapshot_feed.receive(Instant::now());
                 self.sim.record(&snapshot);
                 self.sim.snapshot = Some(snapshot);
             }
             BackendEvent::SessionChanged(snapshot) => {
+                if snapshot.is_some() {
+                    self.snapshot_feed.observe(Instant::now());
+                }
                 match &snapshot {
                     None => {
+                        self.session_epoch = self.session_epoch.wrapping_add(1);
                         self.sim.clear_history();
                         self.explorer.clear();
                     }
                     Some(s) if s.tick == 0 => {
+                        self.session_epoch = self.session_epoch.wrapping_add(1);
                         self.sim.clear_history();
                         self.sim.record(s);
                     }
@@ -517,7 +771,7 @@ impl App {
 
     fn on_bench(&mut self, event: BenchEvent) {
         let line = match &event {
-            BenchEvent::Started { id, config } => Some((
+            BenchEvent::Started { id, config, .. } => Some((
                 LogLevel::Info,
                 format!(
                     "{id} started: {} samples x {} iters, {} warmup",
@@ -542,6 +796,7 @@ impl App {
         };
         if let Some((level, message)) = line {
             self.logs.push(LogEntry {
+                provenance: light_contracts::Provenance::live("light-tui"),
                 at: self.uptime(),
                 level,
                 source: "bench".into(),
@@ -552,12 +807,35 @@ impl App {
     }
 
     fn refresh_processes(&mut self, now: Instant) {
-        self.procs.list = self.sim_client.processes();
+        let selected = self
+            .procs
+            .list
+            .get(self.procs.selected)
+            .map(|p| (p.meta.provenance.producer.clone(), p.id));
+        self.procs.list = self.sim_processes.clone();
         self.procs.list.extend(self.bench_client.processes());
+        self.procs.list.sort_by(|a, b| {
+            (&a.meta.provenance.producer, a.id).cmp(&(&b.meta.provenance.producer, b.id))
+        });
+        if let Some((producer, id)) = selected
+            && let Some(index) = self
+                .procs
+                .list
+                .iter()
+                .position(|p| p.id == id && p.meta.provenance.producer == producer)
+        {
+            self.procs.selected = index;
+        }
+        self.procs.cpu_history.retain(|(producer, id), _| {
+            self.procs
+                .list
+                .iter()
+                .any(|p| p.id == *id && p.meta.provenance.producer == *producer)
+        });
         for p in &self.procs.list {
             self.procs
                 .cpu_history
-                .entry(p.id)
+                .entry((p.meta.provenance.producer.clone(), p.id))
                 .or_insert_with(|| Series::new(HISTORY))
                 .push(p.cpu);
         }
@@ -571,6 +849,7 @@ impl App {
     fn notify(&mut self, level: LogLevel, text: impl Into<String>) {
         let text = text.into();
         self.logs.push(LogEntry {
+            provenance: light_contracts::Provenance::live("light-tui"),
             at: self.uptime(),
             level,
             source: "tui".into(),
@@ -592,16 +871,108 @@ impl App {
     }
 
     fn command(&mut self, command: SimCommand) {
+        if !self.sim_ready {
+            self.notify(LogLevel::Error, "simulation backend is not ready");
+            return;
+        }
+        let invalidates_particles = matches!(
+            &command,
+            SimCommand::Create(_) | SimCommand::Destroy | SimCommand::Reset
+        );
         let result = self.sim_client.command(command);
+        if result.is_ok() {
+            if self.pending_commands == 0 {
+                self.command_submitted = Some(Instant::now());
+            }
+            self.pending_commands += 1;
+            if invalidates_particles {
+                self.session_epoch = self.session_epoch.wrapping_add(1);
+            }
+        }
         self.report(result);
     }
 
     pub fn update(&mut self, action: Action) {
+        if self.inspector.open {
+            let delta = match action {
+                Action::Up => Some(-1),
+                Action::Down => Some(1),
+                Action::PageUp => Some(-(PAGE as isize)),
+                Action::PageDown => Some(PAGE as isize),
+                Action::Home => Some(isize::MIN / 2),
+                Action::End => Some(isize::MAX / 2),
+                _ => None,
+            };
+            if let Some(delta) = delta {
+                self.inspector.navigate(delta);
+                return;
+            }
+            if !matches!(
+                action,
+                Action::Noop
+                    | Action::Quit
+                    | Action::CloseOverlay
+                    | Action::ToggleInspector
+                    | Action::InspectRefresh
+                    | Action::InspectSource
+                    | Action::InspectSelect(_)
+                    | Action::InspectScroll(_)
+                    | Action::Hover(_, _)
+            ) {
+                return;
+            }
+        }
+        if self.pending_commands != 0
+            && matches!(
+                action,
+                Action::CreateSession
+                    | Action::DestroySession
+                    | Action::RecreateSession
+                    | Action::ToggleRun
+                    | Action::Step(_)
+                    | Action::ResetSession
+                    | Action::AdjustField(ConfigField::Timestep, _)
+            )
+        {
+            self.notify(
+                LogLevel::Warn,
+                "previous simulation command is still pending",
+            );
+            return;
+        }
         match action {
+            Action::CycleTheme(delta) => {
+                self.theme = self.theme.cycle(delta);
+                self.explorer.colormap = crate::colormap::Colormap::Theme;
+            }
             Action::Noop => {}
             Action::Quit => self.running = false,
             Action::ToggleHelp => self.show_help = !self.show_help,
-            Action::CloseOverlay => self.show_help = false,
+            Action::CloseOverlay => {
+                self.show_help = false;
+                self.inspector.open = false;
+            }
+            Action::ToggleInspector => {
+                self.inspector.open = !self.inspector.open;
+                if self.inspector.open {
+                    self.show_help = false;
+                    self.inspector.particle = self.tab == Tab::Particles;
+                    self.refresh_inspector();
+                }
+            }
+            Action::InspectRefresh => self.refresh_inspector(),
+            Action::InspectSource => {
+                self.inspector.particle = !self.inspector.particle;
+                self.inspector.selected = 0;
+                self.refresh_inspector();
+            }
+            Action::InspectSelect(index) => {
+                self.inspector.selected = index.min(self.inspector.len().saturating_sub(1));
+                self.inspector.detail_scroll = 0;
+            }
+            Action::InspectScroll(delta) => {
+                self.inspector.scroll_detail(delta);
+            }
             Action::Hover(x, y) => self.mouse = Some((x, y)),
             Action::NextTab => self.tab = self.tab.offset(1),
             Action::PrevTab => self.tab = self.tab.offset(-1),
@@ -615,11 +986,30 @@ impl App {
 
             Action::Up => self.navigate(-1),
             Action::Down => self.navigate(1),
-            Action::PageUp => self.navigate(-(PAGE as isize)),
-            Action::PageDown => self.navigate(PAGE as isize),
+            Action::PageUp => self.navigate(-(self.page_size() as isize)),
+            Action::PageDown => self.navigate(self.page_size() as isize),
             Action::Home => self.navigate(isize::MIN / 2),
             Action::End => self.navigate(isize::MAX / 2),
             Action::SelectRow(i) => self.select_row(i),
+            Action::ScrollTo(i) => match self.tab {
+                Tab::Telemetry => {
+                    self.telemetry_scroll = i.min(
+                        crate::views::telemetry::lines(self)
+                            .len()
+                            .saturating_sub(self.telemetry_height.get()),
+                    )
+                }
+                Tab::Logs => {
+                    let max = self
+                        .logs
+                        .visible()
+                        .count()
+                        .saturating_sub(self.logs.height.get());
+                    self.logs.scroll = max.saturating_sub(i);
+                    self.logs.follow = self.logs.scroll == 0;
+                }
+                _ => self.select_row(i),
+            },
 
             Action::CreateSession => self.command(SimCommand::Create(self.sim.draft)),
             Action::DestroySession => self.command(SimCommand::Destroy),
@@ -699,6 +1089,14 @@ impl App {
         }
     }
 
+    fn refresh_inspector(&mut self) {
+        self.inspector.refresh(
+            self.sim.snapshot.as_ref(),
+            self.explorer.frame.as_ref(),
+            self.explorer.selected,
+        );
+    }
+
     fn navigate(&mut self, delta: isize) {
         let move_in = |i: usize, len: usize| -> usize {
             if len == 0 {
@@ -710,6 +1108,17 @@ impl App {
             }
         };
         match self.tab {
+            Tab::Telemetry => {
+                self.telemetry_scroll = (self.telemetry_scroll as isize)
+                    .saturating_add(delta)
+                    .clamp(
+                        0,
+                        crate::views::telemetry::lines(self)
+                            .len()
+                            .saturating_sub(self.telemetry_height.get())
+                            as isize,
+                    ) as usize;
+            }
             Tab::Overview => {}
             Tab::Simulation => {
                 let i = self.sim.field_index();
@@ -730,12 +1139,24 @@ impl App {
                 // Up (negative) scrolls toward older entries.
                 let scroll = (self.logs.scroll as isize)
                     .saturating_sub(delta)
-                    .clamp(0, total.saturating_sub(1) as isize)
+                    .clamp(0, total.saturating_sub(self.logs.height.get()) as isize)
                     as usize;
                 self.logs.scroll = scroll;
                 self.logs.follow = scroll == 0;
             }
         }
+    }
+
+    fn page_size(&self) -> usize {
+        match self.tab {
+            Tab::Particles => self.explorer.table_viewport.height.get(),
+            Tab::Benchmarks => self.bench.viewport.height.get(),
+            Tab::Processes => self.procs.viewport.height.get(),
+            Tab::Telemetry => self.telemetry_height.get(),
+            Tab::Logs => self.logs.height.get(),
+            _ => PAGE,
+        }
+        .max(1)
     }
 
     fn select_row(&mut self, i: usize) {
@@ -765,14 +1186,67 @@ impl SimView {
 #[cfg(test)]
 pub(crate) mod testing {
     use light_bench::BenchRuntime;
+    use light_contracts::{
+        ClientError, ParticleRequest, SimClient, SimCommand, SimConnection, SimUpdate,
+    };
     use light_mock::MockClient;
 
     use super::App;
 
+    /// Deterministic transport fixture. Production always uses the worker.
+    pub struct ImmediateConnection {
+        backend: MockClient,
+        updates: Vec<SimUpdate>,
+        next_query: u64,
+    }
+
+    impl ImmediateConnection {
+        pub fn new(seed: u64) -> Self {
+            let backend = MockClient::new(seed);
+            let updates = vec![SimUpdate::Ready {
+                info: backend.info(),
+                snapshot: backend.snapshot(),
+            }];
+            Self {
+                backend,
+                updates,
+                next_query: 0,
+            }
+        }
+    }
+
+    impl SimConnection for ImmediateConnection {
+        fn command(&mut self, command: SimCommand) -> Result<(), ClientError> {
+            self.backend.command(command)?;
+            self.updates
+                .extend(self.backend.poll().into_iter().map(SimUpdate::Backend));
+            self.updates.push(SimUpdate::CommandCompleted(Ok(())));
+            Ok(())
+        }
+
+        fn query_particles(&mut self, request: ParticleRequest) -> Result<u64, ClientError> {
+            let id = self.next_query;
+            self.next_query += 1;
+            self.updates.push(SimUpdate::Particles {
+                id,
+                result: self.backend.particles(&request),
+            });
+            Ok(id)
+        }
+
+        fn poll(&mut self) -> Vec<SimUpdate> {
+            self.updates
+                .extend(self.backend.poll().into_iter().map(SimUpdate::Backend));
+            self.updates
+                .push(SimUpdate::Processes(self.backend.processes()));
+            std::mem::take(&mut self.updates)
+        }
+    }
+
     /// An app wired to the mock sim and a bench runtime over mock workloads.
     pub fn mock_app(seed: u64) -> App {
         App::new(
-            Box::new(MockClient::new(seed)),
+            Box::new(ImmediateConnection::new(seed)),
             Box::new(BenchRuntime::new(light_mock::bench_registry(seed))),
         )
     }
@@ -781,6 +1255,69 @@ pub(crate) mod testing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use light_contracts::{ClientError, SimClient};
+    use std::sync::mpsc::{self, Receiver, Sender};
+
+    struct ControlledConnection {
+        updates: Receiver<SimUpdate>,
+        queries: Sender<(u64, ParticleRequest)>,
+        commands: Sender<SimCommand>,
+        next_query: u64,
+    }
+
+    impl SimConnection for ControlledConnection {
+        fn command(&mut self, command: SimCommand) -> Result<(), ClientError> {
+            self.commands.send(command).unwrap();
+            Ok(())
+        }
+
+        fn query_particles(&mut self, request: ParticleRequest) -> Result<u64, ClientError> {
+            let id = self.next_query;
+            self.next_query += 1;
+            self.queries.send((id, request)).unwrap();
+            Ok(id)
+        }
+
+        fn poll(&mut self) -> Vec<SimUpdate> {
+            self.updates.try_iter().collect()
+        }
+    }
+
+    type ControlledApp = (
+        App,
+        Sender<SimUpdate>,
+        Receiver<(u64, ParticleRequest)>,
+        Receiver<SimCommand>,
+    );
+
+    fn controlled_app() -> ControlledApp {
+        let (updates_tx, updates_rx) = mpsc::channel();
+        let (queries_tx, queries_rx) = mpsc::channel();
+        let (commands_tx, commands_rx) = mpsc::channel();
+        let backend = light_mock::MockClient::with_session(1, SimConfig::default());
+        updates_tx
+            .send(SimUpdate::Ready {
+                info: backend.info(),
+                snapshot: backend.snapshot(),
+            })
+            .unwrap();
+        let app = App::new(
+            Box::new(ControlledConnection {
+                updates: updates_rx,
+                queries: queries_tx,
+                commands: commands_tx,
+                next_query: 0,
+            }),
+            Box::new(light_bench::BenchRuntime::builtin()),
+        );
+        (app, updates_tx, queries_rx, commands_rx)
+    }
+
+    fn query_result(request: &ParticleRequest) -> light_contracts::ParticleFrame {
+        light_mock::MockClient::with_session(1, SimConfig::default())
+            .particles(request)
+            .unwrap()
+    }
 
     fn app() -> App {
         testing::mock_app(1)
@@ -879,5 +1416,199 @@ mod tests {
         assert_eq!(c.particle_count, 1 << 24);
         assert_eq!(c.dt, 1e-1);
         assert_eq!(step_u32(&[10, 25, 50], 30, -1), 25);
+    }
+
+    #[test]
+    fn stale_running_data_is_distinct_from_intentionally_held_data() {
+        let mut app = app();
+        assert_eq!(app.snapshot_health(), "NO SESSION");
+        app.update(Action::CreateSession);
+        app.snapshot_feed.last_received = Some(Instant::now() - Duration::from_secs(5));
+        assert_eq!(app.snapshot_health(), "HELD");
+        app.sim.snapshot.as_mut().unwrap().status = SimStatus::Running;
+        assert_eq!(app.snapshot_health(), "STALE");
+        app.snapshot_feed.last_received = Some(Instant::now());
+        assert_eq!(app.snapshot_health(), "FRESH");
+        app.connection_error = Some("disconnected".into());
+        assert_eq!(app.snapshot_health(), "FAULTED");
+    }
+
+    #[test]
+    fn log_scroll_keeps_a_full_page_and_survives_ring_eviction() {
+        let mut app = app();
+        app.tab = Tab::Logs;
+        app.logs.height.set(5);
+        for i in 0..LOG_CAPACITY + 10 {
+            app.logs.push(LogEntry {
+                provenance: Default::default(),
+                at: Duration::ZERO,
+                level: LogLevel::Info,
+                source: "test".into(),
+                message: i.to_string(),
+            });
+        }
+        app.update(Action::Home);
+        assert_eq!(app.logs.scroll, LOG_CAPACITY - 5);
+        app.logs.push(LogEntry {
+            provenance: Default::default(),
+            at: Duration::ZERO,
+            level: LogLevel::Info,
+            source: "test".into(),
+            message: "new".into(),
+        });
+        assert_eq!(app.logs.scroll, LOG_CAPACITY - 5);
+        app.update(Action::End);
+        assert_eq!(app.logs.scroll, 0);
+        assert!(app.logs.follow);
+    }
+
+    #[test]
+    fn in_flight_query_edits_discard_old_results_and_schedule_only_the_latest() {
+        let (mut app, updates, queries, _commands) = controlled_app();
+        app.update(Action::GoTo(Tab::Particles));
+        app.tick();
+        let (id, request) = queries.try_recv().unwrap();
+        assert!(app.explorer.loading);
+        app.update(Action::Explore(crate::explorer::ExplorerAction::CycleX(1)));
+        app.update(Action::Explore(crate::explorer::ExplorerAction::CycleX(1)));
+        assert!(queries.try_recv().is_err(), "do not queue obsolete queries");
+        updates
+            .send(SimUpdate::Particles {
+                id,
+                result: Ok(query_result(&request)),
+            })
+            .unwrap();
+        app.tick();
+        assert!(
+            app.explorer.frame.is_none(),
+            "old query must not overwrite the new one"
+        );
+        let (id, latest) = queries.try_recv().unwrap();
+        assert_eq!(latest, app.explorer.request());
+        updates
+            .send(SimUpdate::Particles {
+                id,
+                result: Ok(query_result(&latest)),
+            })
+            .unwrap();
+        app.tick();
+        assert!(!app.explorer.loading);
+        assert_eq!(
+            app.explorer
+                .frame
+                .as_ref()
+                .unwrap()
+                .histogram
+                .as_ref()
+                .unwrap()
+                .x,
+            app.explorer.heat_x
+        );
+    }
+
+    #[test]
+    fn recreation_invalidates_particle_results_from_the_previous_session() {
+        let (mut app, updates, queries, _commands) = controlled_app();
+        app.update(Action::GoTo(Tab::Particles));
+        app.tick();
+        let (id, request) = queries.try_recv().unwrap();
+        let snapshot = app.sim.snapshot.clone();
+        updates
+            .send(SimUpdate::Backend(BackendEvent::SessionChanged(None)))
+            .unwrap();
+        updates
+            .send(SimUpdate::Backend(BackendEvent::SessionChanged(snapshot)))
+            .unwrap();
+        updates
+            .send(SimUpdate::Particles {
+                id,
+                result: Ok(query_result(&request)),
+            })
+            .unwrap();
+        app.tick();
+        assert!(app.explorer.frame.is_none());
+        assert!(
+            queries.try_recv().is_ok(),
+            "new session needs a fresh query"
+        );
+    }
+
+    #[test]
+    fn command_acknowledgments_prevent_duplicate_input_and_surface_failures() {
+        let (mut app, updates, _queries, commands) = controlled_app();
+        app.update(Action::Step(1));
+        assert_eq!(commands.try_recv().unwrap(), SimCommand::Step(1));
+        app.update(Action::Step(1));
+        assert!(commands.try_recv().is_err());
+        assert!(app.toast.as_ref().unwrap().text.contains("pending"));
+        updates
+            .send(SimUpdate::CommandCompleted(Err(ClientError::Backend(
+                "test failure".into(),
+            ))))
+            .unwrap();
+        app.tick();
+        assert!(app.toast.as_ref().unwrap().text.contains("test failure"));
+        app.update(Action::Step(1));
+        assert_eq!(commands.try_recv().unwrap(), SimCommand::Step(1));
+    }
+
+    #[test]
+    fn worker_faults_clear_pending_work_and_remain_visible() {
+        let (mut app, updates, queries, _commands) = controlled_app();
+        app.update(Action::GoTo(Tab::Particles));
+        app.tick();
+        queries.try_recv().unwrap();
+        updates
+            .send(SimUpdate::Faulted("backend disconnected".into()))
+            .unwrap();
+        app.tick();
+        assert!(!app.explorer.loading);
+        assert!(app.particle_request.is_none());
+        assert!(matches!(app.sim.status(), SimStatus::Faulted(_)));
+        assert!(
+            app.toast
+                .as_ref()
+                .unwrap()
+                .text
+                .contains("backend disconnected")
+        );
+        assert!(queries.try_recv().is_err());
+    }
+
+    #[test]
+    fn stalled_backend_initialization_does_not_block_input_or_rendering() {
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let runtime = light_runtime::SimRuntime::spawn(move || {
+            entered_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+            Box::new(light_mock::MockClient::new(1))
+        })
+        .unwrap();
+        entered_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        let mut app = App::new(
+            Box::new(runtime),
+            Box::new(light_bench::BenchRuntime::builtin()),
+        );
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 35)).unwrap();
+        let mut hits = crate::hit::HitMap::default();
+        let started = Instant::now();
+        for _ in 0..12 {
+            app.tick();
+            app.update(Action::NextTab);
+            terminal
+                .draw(|frame| {
+                    hits.clear();
+                    crate::views::render(&app, frame, &mut hits);
+                })
+                .unwrap();
+        }
+        let elapsed = started.elapsed();
+        release_tx.send(()).unwrap();
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "UI waited for blocked backend: {elapsed:?}"
+        );
     }
 }

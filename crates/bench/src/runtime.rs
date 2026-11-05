@@ -138,6 +138,25 @@ impl BenchClient for BenchRuntime {
         let alive = self.worker.as_ref().is_some_and(|w| !w.is_finished());
         let busy = alive && self.active.is_some();
         vec![ProcessInfo {
+            meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::live(
+                "light-bench/worker",
+            ))
+            .with_field(
+                "cpu",
+                "1 core",
+                light_contracts::Provenance {
+                    quality: light_contracts::DataQuality::Estimated,
+                    ..light_contracts::Provenance::live("light-bench/activity-estimate")
+                },
+            )
+            .with_field(
+                "memory_bytes",
+                "byte",
+                light_contracts::Provenance {
+                    quality: light_contracts::DataQuality::Unavailable,
+                    ..Default::default()
+                },
+            ),
             id: WORKER_PROCESS_ID,
             name: "bench-worker".into(),
             kind: ProcessKind::Bench,
@@ -154,7 +173,7 @@ impl BenchClient for BenchRuntime {
     }
 
     fn poll(&mut self) -> Vec<BenchEvent> {
-        let events: Vec<_> = self.events.try_iter().collect();
+        let events: Vec<_> = self.events.try_iter().take(128).collect();
         if let Some(active) = &self.active
             && events
                 .iter()
@@ -209,8 +228,24 @@ pub fn run_blocking(
     cancel: &AtomicBool,
     tx: &Sender<BenchEvent>,
 ) {
-    let id = bench.descriptor().id;
+    let descriptor = bench.descriptor();
+    let id = descriptor.id;
+    let mut meta = descriptor.meta;
+    static NEXT_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    meta.provenance.run_id = Some(format!(
+        "bench-{}-{}",
+        std::process::id(),
+        NEXT_RUN.fetch_add(1, Ordering::Relaxed)
+    ));
+    meta.captured_at = Some(std::time::SystemTime::now());
+    meta.fields.retain(|field| field.path != "timing");
+    meta = meta.with_field(
+        "timing",
+        "s/iteration",
+        light_contracts::Provenance::live("light-bench/clock"),
+    );
     let _ = tx.send(BenchEvent::Started {
+        meta,
         id: id.clone(),
         config,
     });
@@ -262,6 +297,9 @@ mod tests {
     impl Bench for Spin {
         fn descriptor(&self) -> BenchDescriptor {
             BenchDescriptor {
+                meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::live(
+                    "test-workload",
+                )),
                 id: "test/spin".into(),
                 group: "test".into(),
                 description: "busy loop".into(),
@@ -278,6 +316,9 @@ mod tests {
     impl Bench for Sleepy {
         fn descriptor(&self) -> BenchDescriptor {
             BenchDescriptor {
+                meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::live(
+                    "test-workload",
+                )),
                 id: "test/sleepy".into(),
                 group: "test".into(),
                 description: "slow iterations".into(),
@@ -294,6 +335,9 @@ mod tests {
     impl Bench for Boom {
         fn descriptor(&self) -> BenchDescriptor {
             BenchDescriptor {
+                meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::live(
+                    "test-workload",
+                )),
                 id: "test/boom".into(),
                 group: "test".into(),
                 description: "always panics".into(),
@@ -326,6 +370,24 @@ mod tests {
             thread::sleep(Duration::from_millis(1));
         }
         panic!("run did not finish: {seen:?}");
+    }
+
+    #[test]
+    fn poll_bounds_work_without_losing_queued_events() {
+        let mut runtime = BenchRuntime::new(Registry::new());
+        let (sender, receiver) = mpsc::channel();
+        runtime.events = receiver;
+        for _ in 0..300 {
+            sender
+                .send(BenchEvent::Cancelled {
+                    id: "test/bounded".into(),
+                })
+                .unwrap();
+        }
+        assert_eq!(runtime.poll().len(), 128);
+        assert_eq!(runtime.poll().len(), 128);
+        assert_eq!(runtime.poll().len(), 44);
+        assert!(runtime.poll().is_empty());
     }
 
     #[test]

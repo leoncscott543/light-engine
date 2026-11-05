@@ -14,7 +14,7 @@ use crate::widgets::{self, Button, hovered, panel};
 pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let [bar, list] = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(area);
     filter_bar(app, frame, bar, hits);
-    log_list(app, frame, list);
+    log_list(app, frame, list, hits);
 }
 
 fn filter_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
@@ -34,12 +34,12 @@ fn filter_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let rect = Rect::new(x, area.y, w, 1);
         let style = if level == app.logs.min_level {
             theme::log_level(level)
-                .bg(theme::ACCENT)
+                .bg(theme::palette().accent)
                 .add_modifier(Modifier::BOLD)
         } else if hovered(app.mouse, rect) {
-            theme::log_level(level).bg(theme::HOVER)
+            theme::log_level(level).bg(theme::palette().hover)
         } else {
-            theme::log_level(level).bg(theme::SURFACE)
+            theme::log_level(level).bg(theme::palette().surface)
         };
         frame.render_widget(Paragraph::new(Span::styled(text, style)), rect);
         hits.push(rect, Action::SetLogLevel(level));
@@ -71,7 +71,7 @@ fn filter_bar(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     }
 }
 
-fn log_list(app: &App, frame: &mut Frame, area: Rect) {
+fn log_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let visible: Vec<_> = app.logs.visible().collect();
     let title = format!("Logs ({}/{})", visible.len(), app.logs.entries.len());
     let block = panel(&title, true);
@@ -79,7 +79,7 @@ fn log_list(app: &App, frame: &mut Frame, area: Rect) {
         block.title(
             Line::from(Span::styled(
                 format!(" ↑ {} newer · End to follow ", app.logs.scroll),
-                Style::new().fg(theme::WARN),
+                Style::new().fg(theme::palette().warn),
             ))
             .right_aligned(),
         )
@@ -100,17 +100,27 @@ fn log_list(app: &App, frame: &mut Frame, area: Rect) {
     }
 
     let height = inner.height as usize;
+    app.logs.height.set(height);
     let end = visible.len().saturating_sub(app.logs.scroll);
     let start = end.saturating_sub(height);
+    widgets::scrollbar(frame, area, visible.len(), start, height);
+    widgets::scrollbar_hits(area, visible.len(), height, hits);
     let lines: Vec<Line> = visible[start..end]
         .iter()
         .map(|e| {
             let secs = e.at.as_secs_f64();
             Line::from(vec![
                 Span::styled(format!("{secs:>9.3}s "), theme::faint()),
-                Span::styled(format!("{:<5} ", e.level), theme::log_level(e.level)),
-                Span::styled(format!("{:<6} ", e.source), theme::dim()),
-                Span::styled(e.message.clone(), theme::base()),
+                Span::styled(
+                    widgets::fixed(&e.level.to_string(), 6, false),
+                    theme::log_level(e.level),
+                ),
+                Span::styled(
+                    widgets::fixed(&e.provenance.origin.to_string(), 7, false),
+                    theme::title(),
+                ),
+                Span::styled(widgets::fixed(&e.source, 13, false), theme::dim()),
+                Span::styled(widgets::clean(&e.message), theme::base()),
             ])
         })
         .collect();

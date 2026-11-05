@@ -12,7 +12,17 @@ use crate::hit::HitMap;
 pub fn map(app: &App, hits: &HitMap, event: Event) -> Option<Action> {
     match event {
         Event::Key(key) if key.kind != KeyEventKind::Release => map_key(app, key),
-        Event::Mouse(mouse) => map_mouse(hits, mouse),
+        Event::Mouse(mouse) => {
+            if app.show_help
+                && matches!(
+                    mouse.kind,
+                    MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                )
+            {
+                return Some(Action::Noop);
+            }
+            map_mouse(hits, mouse)
+        }
         _ => None,
     }
 }
@@ -20,6 +30,23 @@ pub fn map(app: &App, hits: &HitMap, event: Event) -> Option<Action> {
 fn map_key(app: &App, key: KeyEvent) -> Option<Action> {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         return matches!(key.code, KeyCode::Char('c')).then_some(Action::Quit);
+    }
+    if app.inspector.open {
+        return match key.code {
+            KeyCode::Char('i') | KeyCode::Esc => Some(Action::CloseOverlay),
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Enter => Some(Action::InspectRefresh),
+            KeyCode::Char('p') => Some(Action::InspectSource),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::Up),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::Down),
+            KeyCode::PageUp => Some(Action::PageUp),
+            KeyCode::PageDown => Some(Action::PageDown),
+            KeyCode::Home => Some(Action::Home),
+            KeyCode::End => Some(Action::End),
+            KeyCode::Char('[') => Some(Action::InspectScroll(-1)),
+            KeyCode::Char(']') => Some(Action::InspectScroll(1)),
+            _ => None,
+        };
     }
     if app.tab == Tab::Particles && app.explorer.editing {
         return map_editor_key(key.code).map(Action::Explore);
@@ -34,10 +61,13 @@ fn map_key(app: &App, key: KeyEvent) -> Option<Action> {
     let global = match key.code {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('?') => Some(Action::ToggleHelp),
+        KeyCode::Char('i') => Some(Action::ToggleInspector),
+        KeyCode::Char('t') => Some(Action::CycleTheme(1)),
+        KeyCode::Char('T') => Some(Action::CycleTheme(-1)),
         KeyCode::Esc => Some(Action::CloseOverlay),
         KeyCode::Tab => Some(Action::NextTab),
         KeyCode::BackTab => Some(Action::PrevTab),
-        KeyCode::Char(c @ '1'..='6') => Some(Action::GoTo(Tab::ALL[c as usize - '1' as usize])),
+        KeyCode::Char(c @ '1'..='7') => Some(Action::GoTo(Tab::ALL[c as usize - '1' as usize])),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::Down),
         KeyCode::PageUp => Some(Action::PageUp),
@@ -101,7 +131,7 @@ fn map_tab_key(app: &App, code: KeyCode) -> Option<Action> {
             _ if left || right => Some(Action::AdjustSamples(delta)),
             _ => None,
         },
-        Tab::Processes => None,
+        Tab::Processes | Tab::Telemetry => None,
         Tab::Logs => match code {
             KeyCode::Char('f') => Some(Action::ToggleFollow),
             KeyCode::Char('c') => Some(Action::ClearLogs),
@@ -135,6 +165,11 @@ fn map_mouse(hits: &HitMap, mouse: MouseEvent) -> Option<Action> {
         MouseEventKind::Down(MouseButton::Left) => hits.at(mouse.column, mouse.row),
         MouseEventKind::ScrollUp => Some(Action::Up),
         MouseEventKind::ScrollDown => Some(Action::Down),
+        MouseEventKind::Drag(MouseButton::Left)
+            if matches!(hits.at(mouse.column, mouse.row), Some(Action::ScrollTo(_))) =>
+        {
+            hits.at(mouse.column, mouse.row)
+        }
         MouseEventKind::Moved | MouseEventKind::Drag(_) => {
             Some(Action::Hover(mouse.column, mouse.row))
         }
@@ -187,6 +222,31 @@ mod tests {
         app.update(Action::ToggleHelp);
         assert_eq!(
             map(&app, &hits, key(KeyCode::Char('r'))),
+            Some(Action::CloseOverlay)
+        );
+    }
+
+    #[test]
+    fn inspector_keys_capture_input_without_triggering_simulation() {
+        let mut app = crate::app::testing::mock_app(1);
+        let hits = HitMap::default();
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('i'))),
+            Some(Action::ToggleInspector)
+        );
+        app.update(Action::ToggleInspector);
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Enter)),
+            Some(Action::InspectRefresh)
+        );
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Char('p'))),
+            Some(Action::InspectSource)
+        );
+        assert_eq!(map(&app, &hits, key(KeyCode::Char(' '))), None);
+        assert_eq!(map(&app, &hits, key(KeyCode::Char('n'))), None);
+        assert_eq!(
+            map(&app, &hits, key(KeyCode::Esc)),
             Some(Action::CloseOverlay)
         );
     }

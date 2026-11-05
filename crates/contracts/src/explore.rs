@@ -187,6 +187,7 @@ fn locate((lo, hi): (f64, f64), bins: u16, v: f64) -> Option<u16> {
 /// Result of one [`ParticleRequest`] against one consistent state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParticleFrame {
+    pub meta: crate::ObservationMeta,
     pub tick: u64,
     pub sim_time: f64,
     pub scanned: u64,
@@ -338,6 +339,11 @@ pub fn execute(source: &dyn ParticleSource, request: &ParticleRequest) -> Partic
     });
 
     ParticleFrame {
+        meta: source.metadata().with_field(
+            "elapsed",
+            "s",
+            crate::Provenance::live("light-contracts/query-clock"),
+        ),
         tick: source.tick(),
         sim_time: source.sim_time(),
         scanned: count,

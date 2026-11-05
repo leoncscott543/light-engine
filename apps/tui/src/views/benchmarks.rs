@@ -15,8 +15,11 @@ use crate::theme;
 use crate::widgets::{self, Button, hovered, panel};
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-    let [list, detail] =
-        Layout::horizontal([Constraint::Length(46), Constraint::Min(0)]).areas(area);
+    let [list, detail] = Layout::horizontal([
+        Constraint::Length(if area.width < 120 { 30 } else { 46 }),
+        Constraint::Min(0),
+    ])
+    .areas(area);
     bench_list(app, frame, list, hits);
 
     let Some(desc) = app.bench.selected() else {
@@ -52,7 +55,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         samples,
         "Samples",
         &values,
-        theme::HONEY,
+        theme::palette().honey,
         |us| fmt::duration(Duration::from_secs_f64(us * 1e-6)),
         false,
     );
@@ -75,7 +78,13 @@ fn bench_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     }
 
     let height = inner.height as usize;
-    let offset = widgets::scroll_offset(app.bench.selected, height);
+    let offset = app
+        .bench
+        .viewport
+        .range(app.bench.selected, app.bench.list.len(), height)
+        .start;
+    widgets::scrollbar(frame, area, app.bench.list.len(), offset, height);
+    widgets::scrollbar_hits(area, app.bench.list.len(), height, hits);
     for (row, (i, desc)) in app
         .bench
         .list
@@ -89,7 +98,9 @@ fn bench_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let style = if i == app.bench.selected {
             theme::selected()
         } else if hovered(app.mouse, rect) {
-            Style::new().bg(theme::HOVER).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().hover)
+                .fg(theme::palette().text)
         } else {
             theme::base()
         };
@@ -116,10 +127,16 @@ fn bench_list(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             " "
         };
         let line = Line::from(vec![
-            Span::styled(marker, style.fg(theme::OK)),
-            Span::styled(format!("{:<8} ", desc.group), style.fg(theme::TEXT_DIM)),
-            Span::styled(format!("{name:<name_w$.name_w$}"), style),
-            Span::styled(format!("{badge:>badge_w$}"), style.fg(theme::GOLD)),
+            Span::styled(marker, style.fg(theme::palette().ok)),
+            Span::styled(
+                format!("{} ", widgets::fixed(&desc.group, 8, false)),
+                style.fg(theme::palette().text_dim),
+            ),
+            Span::styled(widgets::fixed(name, name_w, false), style),
+            Span::styled(
+                widgets::fixed(&badge, badge_w, true),
+                style.fg(theme::palette().gold),
+            ),
         ]);
         frame.render_widget(Paragraph::new(line).style(style), rect);
         hits.push(rect, Action::SelectRow(i));
@@ -130,7 +147,8 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
     let Some(desc) = app.bench.selected() else {
         return;
     };
-    let block = panel(&desc.id.0, false);
+    let title = format!("{} workload · {}", desc.meta.provenance.origin, desc.id);
+    let block = panel(&title, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let [info, _, config, _, buttons] = Layout::vertical([
@@ -144,12 +162,15 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
 
     frame.render_widget(
         Paragraph::new(vec![
-            Line::styled(desc.description.clone(), theme::base()),
-            widgets::kv(
-                "group ",
-                Span::styled(desc.group.clone(), theme::value()),
-                6,
+            Line::styled(
+                format!(
+                    "{} workload · timing {}",
+                    desc.meta.provenance.origin,
+                    widgets::evidence(&desc.meta, "timing")
+                ),
+                theme::base(),
             ),
+            Line::styled(widgets::clean(&desc.description), theme::dim()),
         ]),
         info,
     );
@@ -169,7 +190,19 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
             Action::AdjustItersPerSample,
         ),
     ] {
-        x = stepper(app, frame, Rect { x, ..config }, label, value, action, hits) + 2;
+        x = stepper(
+            app,
+            frame,
+            Rect {
+                x,
+                width: config.right().saturating_sub(x),
+                ..config
+            },
+            label,
+            value,
+            action,
+            hits,
+        ) + 2;
     }
 
     let running = app.bench.active.is_some();
@@ -195,7 +228,7 @@ fn header_panel(app: &App, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let w = note.len() as u16;
         if buttons.width > w + 24 {
             frame.render_widget(
-                Paragraph::new(Span::styled(note, Style::new().fg(theme::WARN))),
+                Paragraph::new(Span::styled(note, Style::new().fg(theme::palette().warn))),
                 Rect::new(buttons.right() - w, buttons.y, w, 1),
             );
         }
@@ -225,9 +258,13 @@ fn stepper(
     let inc = Rect::new(val.right(), y, 2, 1);
     let arrow = |r: Rect| {
         if hovered(app.mouse, r) {
-            Style::new().bg(theme::ACCENT).fg(theme::TEXT)
+            Style::new()
+                .bg(theme::palette().accent)
+                .fg(theme::palette().text)
         } else {
-            Style::new().bg(theme::SURFACE).fg(theme::GOLD)
+            Style::new()
+                .bg(theme::palette().surface)
+                .fg(theme::palette().gold)
         }
     };
     frame.render_widget(
@@ -238,7 +275,9 @@ fn stepper(
     frame.render_widget(
         Paragraph::new(Span::styled(
             value_s,
-            Style::new().bg(theme::SURFACE).fg(theme::TEXT),
+            Style::new()
+                .bg(theme::palette().surface)
+                .fg(theme::palette().text),
         )),
         val,
     );
@@ -272,7 +311,11 @@ fn progress_panel(record: Option<&BenchRecord>, frame: &mut Frame, area: Rect) {
     };
     frame.render_widget(
         Gauge::default()
-            .gauge_style(Style::new().fg(theme::ACCENT).bg(theme::SURFACE))
+            .gauge_style(
+                Style::new()
+                    .fg(theme::palette().accent)
+                    .bg(theme::palette().surface),
+            )
             .ratio(ratio)
             .label(Span::styled(label, theme::value())),
         inner,
@@ -313,8 +356,12 @@ fn histogram(record: Option<&BenchRecord>, frame: &mut Frame, area: Rect) {
             };
             Bar::new(*c)
                 .label(Line::styled(label, theme::faint()))
-                .style(Style::new().fg(theme::HONEY))
-                .value_style(Style::new().fg(theme::TEXT).bg(theme::HONEY))
+                .style(Style::new().fg(theme::palette().honey))
+                .value_style(
+                    Style::new()
+                        .fg(theme::palette().text)
+                        .bg(theme::palette().honey),
+                )
         })
         .collect();
     frame.render_widget(

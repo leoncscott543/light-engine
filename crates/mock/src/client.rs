@@ -84,7 +84,8 @@ impl MockClient {
 
         let before = session.tick;
         session.advance(steps);
-        let snapshot = session.snapshot();
+        let mut snapshot = session.snapshot();
+        snapshot.meta.producer_uptime = Some(self.clock);
         self.events.push(BackendEvent::Stepped(snapshot.clone()));
 
         if before / CHECKPOINT_EVERY != snapshot.tick / CHECKPOINT_EVERY {
@@ -110,6 +111,7 @@ impl MockClient {
 
     fn log(&mut self, level: LogLevel, source: &str, message: impl Into<String>) {
         self.events.push(BackendEvent::Log(LogEntry {
+            provenance: light_contracts::Provenance::mock("light-mock", self.seed),
             at: self.clock,
             level,
             source: source.into(),
@@ -143,7 +145,11 @@ impl SimClient for MockClient {
     }
 
     fn snapshot(&self) -> Option<SimSnapshot> {
-        self.session.as_ref().map(Session::snapshot)
+        self.session.as_ref().map(|session| {
+            let mut snapshot = session.snapshot();
+            snapshot.meta.producer_uptime = Some(self.clock);
+            snapshot
+        })
     }
 
     fn command(&mut self, command: SimCommand) -> Result<(), ClientError> {
@@ -218,7 +224,32 @@ impl SimClient for MockClient {
 
     fn particles(&self, request: &ParticleRequest) -> Result<ParticleFrame, ClientError> {
         let session = self.session.as_ref().ok_or(ClientError::NoSession)?;
-        Ok(execute(&session.particles(), request))
+        let mut frame = execute(&session.particles(), request);
+        frame.meta = session.metadata();
+        frame.meta.fields.clear();
+        let source = frame.meta.provenance.clone();
+        for field in light_contracts::ParticleField::ALL {
+            frame.meta = frame.meta.with_field(
+                &format!("rows.{}", field.name()),
+                field.unit(),
+                source.clone(),
+            );
+        }
+        let mut derived = source;
+        derived.quality = light_contracts::DataQuality::Derived;
+        derived.lineage = vec!["rows".into()];
+        frame.meta = frame
+            .meta
+            .with_field("stats", "per-field reduced units", derived.clone())
+            .with_field("histogram", "aggregation units", derived)
+            .with_field(
+                "elapsed",
+                "s",
+                light_contracts::Provenance::live("light-contracts/query-clock"),
+            );
+        frame.meta.captured_at = Some(std::time::SystemTime::now());
+        frame.meta.producer_uptime = Some(self.clock);
+        Ok(frame)
     }
 
     fn processes(&self) -> Vec<ProcessInfo> {
@@ -244,6 +275,10 @@ impl SimClient for MockClient {
         };
 
         let mut out = vec![ProcessInfo {
+            meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::mock(
+                "light-mock/processes",
+                self.seed,
+            )),
             id: ProcessId(1),
             name: "kernel".into(),
             kind: ProcessKind::Kernel,
@@ -254,6 +289,10 @@ impl SimClient for MockClient {
         }];
         for w in 0..INTEGRATOR_WORKERS {
             out.push(ProcessInfo {
+                meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::mock(
+                    "light-mock/processes",
+                    self.seed,
+                )),
                 id: ProcessId(10 + w),
                 name: format!("integrator-{w}"),
                 kind: ProcessKind::Integrator,
@@ -264,6 +303,10 @@ impl SimClient for MockClient {
             });
         }
         out.push(ProcessInfo {
+            meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::mock(
+                "light-mock/processes",
+                self.seed,
+            )),
             id: ProcessId(40),
             name: "sensor-0".into(),
             kind: ProcessKind::Sensor,
@@ -273,6 +316,10 @@ impl SimClient for MockClient {
             uptime: Duration::ZERO,
         });
         out.push(ProcessInfo {
+            meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::mock(
+                "light-mock/processes",
+                self.seed,
+            )),
             id: ProcessId(50),
             name: "snapshot-io".into(),
             kind: ProcessKind::Io,
@@ -281,6 +328,11 @@ impl SimClient for MockClient {
             memory_bytes: 1 << 20,
             uptime,
         });
+        for process in &mut out {
+            process.meta.captured_at = Some(std::time::SystemTime::now());
+            process.meta.producer_uptime = Some(self.clock);
+            process.meta.sequence = self.clock.as_millis() as u64;
+        }
         out
     }
 

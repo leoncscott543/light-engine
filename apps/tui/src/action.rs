@@ -9,6 +9,12 @@ pub enum Action {
     Noop,
     Quit,
     ToggleHelp,
+    ToggleInspector,
+    InspectRefresh,
+    InspectSource,
+    InspectSelect(usize),
+    InspectScroll(i16),
+    CycleTheme(i32),
     CloseOverlay,
     /// Pointer moved; drives hover styling.
     Hover(u16, u16),
@@ -25,6 +31,7 @@ pub enum Action {
     End,
     /// Select a row in the current tab's primary list.
     SelectRow(usize),
+    ScrollTo(usize),
 
     // simulation
     CreateSession,

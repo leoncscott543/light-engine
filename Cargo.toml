@@ -11,6 +11,7 @@ license-file = "LICENSE.md"
 light_bench = { path = "crates/bench" }
 light_contracts = { path = "crates/contracts" }
 light_mock = { path = "crates/mock" }
+light_runtime = { path = "crates/runtime" }
 ratatui = "0.30"
 
 [package]

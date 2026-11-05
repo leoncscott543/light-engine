@@ -1,5 +1,6 @@
 //! Synthetic physics and performance model for a mock session.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use light_contracts::{
@@ -12,8 +13,10 @@ use crate::rng::Rng;
 /// Coefficients per particle: position + momentum, grades 0..=2 in 3D (1+3+3).
 const COEFFS_PER_PARTICLE: u64 = 2 * 7;
 const BYTES_PER_COEFF: u64 = 8;
+static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
 
 pub struct Session {
+    run_id: String,
     pub config: SimConfig,
     pub status: SimStatus,
     pub tick: u64,
@@ -29,6 +32,11 @@ impl Session {
         let mut rng = Rng::new(config.seed);
         let initial_energy = -0.25 * config.particle_count as f64 * rng.range(0.9, 1.1);
         let mut session = Self {
+            run_id: format!(
+                "mock-{}-{}",
+                std::process::id(),
+                NEXT_RUN.fetch_add(1, Ordering::Relaxed)
+            ),
             config,
             status: SimStatus::Idle,
             tick: 0,
@@ -68,6 +76,7 @@ impl Session {
 
     pub fn snapshot(&self) -> SimSnapshot {
         SimSnapshot {
+            meta: self.metadata(),
             config: self.config,
             status: self.status.clone(),
             tick: self.tick,
@@ -75,6 +84,40 @@ impl Session {
             invariants: self.invariants(),
             perf: self.perf,
         }
+    }
+
+    pub fn metadata(&self) -> light_contracts::ObservationMeta {
+        use light_contracts::{ObservationMeta, Provenance};
+        let mut source = Provenance::mock("light-mock/model", self.config.seed);
+        source.run_id = Some(self.run_id.clone());
+        source.producer_version = env!("CARGO_PKG_VERSION").into();
+        source.model = Some("synthetic Hamiltonian/performance illustration".into());
+        let mut meta = ObservationMeta::new(source.clone());
+        meta.sequence = self.tick;
+        meta.captured_at = Some(std::time::SystemTime::now());
+        meta.precision = "f64".into();
+        meta.unit_system = "reduced model units".into();
+        meta.validation = "synthetic fixture; no physical validation".into();
+        meta = meta
+            .with_field("sim_time", "s (model)", source.clone())
+            .with_field("invariants.energy", "reduced energy", source.clone())
+            .with_field(
+                "invariants.initial_energy",
+                "reduced energy",
+                source.clone(),
+            )
+            .with_field("invariants.momentum", "reduced momentum", source.clone())
+            .with_field(
+                "invariants.angular_momentum",
+                "reduced angular momentum",
+                source.clone(),
+            )
+            .with_field("invariants.symplectic_error", "1", source.clone())
+            .with_field("perf.step_time", "s", source.clone())
+            .with_field("perf.particles_per_sec", "particle/s", source.clone())
+            .with_field("perf.memory_bytes", "byte", source.clone())
+            .with_field("perf.lane_utilization", "1", source);
+        meta
     }
 
     /// The full particle state at the current tick.

@@ -54,6 +54,7 @@ impl fmt::Display for ProcessState {
 /// A worker, thread, or service owned by the backend.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessInfo {
+    pub meta: crate::ObservationMeta,
     pub id: ProcessId,
     pub name: String,
     pub kind: ProcessKind,

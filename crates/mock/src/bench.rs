@@ -81,6 +81,7 @@ const CATALOG: &[Spec] = &[
 ];
 
 pub struct MockBench {
+    seed: u64,
     spec: &'static Spec,
     rng: Rng,
 }
@@ -88,6 +89,15 @@ pub struct MockBench {
 impl Bench for MockBench {
     fn descriptor(&self) -> BenchDescriptor {
         BenchDescriptor {
+            meta: light_contracts::ObservationMeta::new(light_contracts::Provenance::mock(
+                "light-mock/bench",
+                self.seed,
+            ))
+            .with_field(
+                "timing",
+                "s/iteration",
+                light_contracts::Provenance::live("light-bench/clock"),
+            ),
             id: BenchId::from(self.spec.id),
             group: self.spec.group.into(),
             description: self.spec.description.into(),
@@ -129,6 +139,7 @@ pub fn registry(seed: u64) -> Registry {
         registry.register(move || {
             let run = runs.fetch_add(1, Ordering::Relaxed);
             MockBench {
+                seed: seed ^ ((index as u64) << 32) ^ run,
                 spec,
                 rng: Rng::new(seed ^ ((index as u64) << 32) ^ run),
             }
